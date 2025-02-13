@@ -1,0 +1,48 @@
+import { mutableHandlers } from "./baseHandlers"
+
+/**
+ * 响应性 Map 缓存对象
+ * key: target
+ * value: proxy
+ * 注意：为了获取指定对象的指定属性对应的执行函数 fn，我们可以借助 WeakMap 实现
+ * WeakMap：
+ * key: 响应性对象 target
+ * value: Map 对象
+ *      key：响应性对象的指定属性
+ *      value：指定对象指定属性的执行函数 fn
+ */
+export const reactiveMap = new WeakMap<object, any>()
+
+/**
+ * 为复杂对象 创建响应性对象
+ * @param target 被代理对象
+ * @returns 代理对象
+ */
+export function reactive(target: object) {
+    return createReactiveObject(target, mutableHandlers, reactiveMap)
+}
+
+/**
+ * 创建响应性对象
+ * @param target 被代理对象
+ * @param baseHandlers handler
+ * @param proxyMap 
+ */
+function createReactiveObject(
+    target: object,
+    baseHandlers: ProxyHandler<any>,
+    proxyMap: WeakMap<object,any>
+) {
+    // 如果该实例已经被代理，直接读取
+    const existingProxy = proxyMap.get(target)
+    if(existingProxy) {
+        return existingProxy
+    }
+
+    // 未代理则生成 proxy 实例
+    const proxy = new Proxy(target, baseHandlers)
+
+    // 缓存代理对象
+    proxyMap.set(target, proxy)
+    return proxy
+}

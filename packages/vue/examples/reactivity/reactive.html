@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>reactive</title>
+    <script src="../../dist/vue.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <p id="p1"></p>
+      <p id="p2"></p>
+    </div>
+  </body>
+  <script>
+    // 已知 Vue.js 文件暴露出的是一个 Vue 实例
+    const { reactive, effect } = Vue
+
+    /**
+     * reactive 实现的基本功能：
+     * 1、是通过 proxy 的 setter 和 getter 来实现监听的（setter 触发依赖、getter 收集依赖）
+     * 2、需要配合 effect 调用副作用函数 fn
+     * 3、基于 WeakMap 完成依赖的收集和处理
+     * 4、支持多个 effect 调用，即至此一个 key 对应多个 fn 的依赖关系
+     *
+     * 存在问题：
+     * 1、只支持对 复杂类型 数据进行使用（reactive 是基于 Proxy 的，他只能代理对象，不能代理简单属性）
+     * 2、reactive 的响应性数据不支持解构，会失去响应性（考虑使用 ref）
+     */
+    const obj = reactive({
+      name: '张三'
+    })
+    effect(() => {
+      document.querySelector('#p1').innerHTML = obj.name
+    })
+    effect(() => {
+      document.querySelector('#p2').innerHTML = obj.name
+    })
+    console.log(obj.name)
+
+    setTimeout(() => {
+      obj.name = '李四'
+    }, 2000)
+  </script>
+</html>
