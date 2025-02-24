@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>computed</title>
+    <script src="../../dist/vue.js"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+
+  <script>
+    const { reactive, computed, effect } = Vue
+    const state = reactive({
+      name: '张三'
+    })
+    // 对比一般的 effect 声明增加 scheduler 函数
+    const computedObj = computed(() => 'name:' + state.name)
+    effect(() => {
+      // 注意：此处会进入 computed 的get value 方法 执行run函数 重新计算（也会会触发 reactive 的getter）
+      document.querySelector('#app').innerText = computedObj.value
+    })
+    setTimeout(() => {
+      // 会触发两次依赖 第一次执行调度 第二次执行依赖函数
+      /**
+       * 流程：
+       * 1、触发 Proxy 的 setter 方法，在内部调用 trigger 方法去触发副作用函数执行，在 triggerEffects 里通过 computed 属性和triggerEffect 里的 scheduler 执行调度
+       * 2、进入 scheduler 函数，将 dirty 设置为 true，再通过 triggerRefValue 方法再次进入 triggerEffect 方法，由于此次 scheduler 函数不存在，所以会执行 effect.run 方法，而是跳过 scheduler 函数
+       */
+      state.name = '李四'
+    }, 2000)
+  </script>
+</html>

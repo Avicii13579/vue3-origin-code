@@ -1,8 +1,10 @@
 import { isArray } from "@vue/shared";
 import { createDep, Dep } from "./dep";
+import { ComputedRefImpl } from "./computed";
 
 // 实二级 Map 里一个 Key 对应多个 value （场景：一个 html 里的 effect 函数多次调用）
 type KeyToDepMap = Map<any,Dep>
+type EffectScheduler = (...args:any[]) => any
 /**
  * WeakMap 的 key 类型为 any，value 的类型为 KeyToDepMap
  */
@@ -13,7 +15,6 @@ const targetMap = new WeakMap<any,KeyToDepMap>()
  * @param key 代理对象的 key，当依赖被触发时，需要根据 key 判断依赖是否存在
  */
 export function track(target:object,key:unknown) {
-    console.log(' track：收集依赖');
     // 如果当前执行函数不存在，则直接 return
     if(!activeEffect)  return
     // 尝试从 targetMap 中获取 target 对应的 value：Map
@@ -65,13 +66,29 @@ export function triggerEffects(dep: Dep) {
     // 把 dep 构建成一个数组
     const effects = isArray(dep) ? dep : [...dep]
     // 依次触发
+    // for(const effect of effects) {
+    //  // BUG 测试计算属性具备缓存性：当第二个 effect 是计算属性时，会进入调度函数，再从 triggerRefValue 中进入，导致死循环
+    //  triggerEffect(effect)
+    // }
+    // 解决死循环：必须先触发计算属性的 effect 在触发非计算属性的 effect
     for(const effect of effects) {
+       if(effect.computed) {
         triggerEffect(effect)
+       }
+    }
+    for(const effect of effects) {
+       if(!effect.computed) {
+        triggerEffect(effect)
+       }
     }
 }
 
 export function triggerEffect(effect: ReactiveEffect) {
+   if(effect.scheduler) {
+    effect.scheduler()
+   } else {
     effect.run()
+   }
 }
 
 /**
@@ -87,6 +104,7 @@ export function effect<T =any>(fn:() => T) {
 }
 
 /**
+ * 是一个全局变量，用于追踪当前正在执行的副作用函数 作用：1、在依赖收集时，知道当前是哪个 effect 正在访问响应式数据 2、建立响应式数据和副作用函数之间的联系
  * 单例的 当前的 effect 拥有 run 函数能执行 fn 的 ReactiveEffect 的实例
  */
 export let activeEffect: ReactiveEffect | undefined
@@ -95,8 +113,11 @@ export let activeEffect: ReactiveEffect | undefined
  * 响应性触发依赖时的执行类
  */
 export  class ReactiveEffect<T = any> {
+    // 判断是否为 computed 的 effect
+    computed?: ComputedRefImpl<T>
+
     // 接收传入的回调函数 fn
-    constructor(public fn:() => T) {}
+    constructor(public fn:() => T, public scheduler: EffectScheduler | null = null) {}
 
     run() {
         // 为 activeEffect 复制

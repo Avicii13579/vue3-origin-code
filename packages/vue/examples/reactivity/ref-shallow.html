@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ref-Shallow</title>
+    <script src="../../dist/vue.js"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+  <script>
+    const { ref, effect } = Vue
+
+    /**
+     * 问：为什么 ref 必须通过点 value 来访问
+     * 答：用 ref 创建的对象不具备响应性 是通过 .value 主动触发 get value 和 set value 两个方法进行依赖收集和触发的
+     */
+
+    /**
+     * ref 声明基本属性通过 refImpl 类中对属性 value 的 get 和 set 触发实现依赖出发和收集
+     */
+    const obj = ref('张三')
+
+    effect(() => {
+      document.querySelector('#app').innerText = obj.value
+    })
+
+    setTimeout(() => {
+      // 触发ref 的setter 方法
+      obj.value = '李四'
+    }, 2000)
+  </script>
+</html>

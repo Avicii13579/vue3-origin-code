@@ -16,11 +16,16 @@
       name: '张三'
     })
 
-    effect(() => {
-      document.getElementById('app').innerText = obj.value.name
-    })
+    effect(
+      // 这个函数默认会执行一次 会触发 getter 方法 进行依赖收集
+      () => {
+        document.getElementById('app').innerText = obj.value.name
+      }
+    )
 
     setTimeout(() => {
+      // 当前触发了一次 ref 的 getter 又触发了 reactive 的 setter
+      // 当前 ref 声明的是复杂类型对象，修改时会触发 reactive 的 setter
       obj.value.name = '李四'
     }, 2000)
   </script>
