@@ -8,6 +8,8 @@ var Vue = (function (exports) {
     var hasChanged = function (value, oldValue) { return !Object.is(value, oldValue); };
     // 是否为一个 function 
     var isFunction = function (val) { return typeof val === 'function'; };
+    // 合并对象
+    var extend = Object.assign;
 
     /******************************************************************************
     Copyright (c) Microsoft Corporation.
@@ -110,7 +112,6 @@ var Vue = (function (exports) {
      * @param newValue key 对应的新值
      */
     function trigger(target, key, newValue) {
-        console.log('trigger: 触发依赖');
         // 根据 target 获取存储的 Map 实例
         var depsMap = targetMap.get(target);
         if (!depsMap)
@@ -134,10 +135,10 @@ var Vue = (function (exports) {
         try {
             // 依次触发
             // for(const effect of effects) {
-            //     // BUG 当第二个 effect 是计算属性时，会进入调度函数，再从 triggerRefValue 中进入，导致死循环
-            //     triggerEffect(effect)
+            //  // BUG 测试计算属性具备缓存性：当第二个 effect 是计算属性时，会进入调度函数，再从 triggerRefValue 中进入，导致死循环
+            //  triggerEffect(effect)
             // }
-            // 解决死循环
+            // 解决死循环：必须先触发计算属性的 effect 在触发非计算属性的 effect
             for (var effects_1 = __values(effects), effects_1_1 = effects_1.next(); !effects_1_1.done; effects_1_1 = effects_1.next()) {
                 var effect_1 = effects_1_1.value;
                 if (effect_1.computed) {
@@ -181,11 +182,17 @@ var Vue = (function (exports) {
      * @param fn
      * @returns 以 ReactiveEffect 实例为 this 的执行函数
      */
-    function effect(fn) {
+    function effect(fn, options) {
         // 实现 ReactiveEffect 实例
         var _effect = new ReactiveEffect(fn);
-        // 执行 run 函数（默认 effect 调用里的 fn 会执行一次）
-        _effect.run();
+        // 存在 options 会进行配置对象合并
+        if (options) {
+            extend(_effect, options);
+        }
+        if (!options || !options.lazy) {
+            // 执行 run 函数（默认 effect 调用里的 fn 会执行一次）
+            _effect.run();
+        }
     }
     /**
      * 是一个全局变量，用于追踪当前正在执行的副作用函数 作用：1、在依赖收集时，知道当前是哪个 effect 正在访问响应式数据 2、建立响应式数据和副作用函数之间的联系
@@ -393,6 +400,7 @@ var Vue = (function (exports) {
                 trackRefValue(this);
                 // 初始化后 默认为 true
                 if (this._dirty) {
+                    // 惰性求值？
                     this._dirty = false;
                     // 会重新计算值
                     this._value = this.effect.run();

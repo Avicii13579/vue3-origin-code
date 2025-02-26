@@ -1,10 +1,15 @@
-import { isArray } from "@vue/shared";
+import { extend, isArray } from "@vue/shared";
 import { createDep, Dep } from "./dep";
 import { ComputedRefImpl } from "./computed";
 
 // 实二级 Map 里一个 Key 对应多个 value （场景：一个 html 里的 effect 函数多次调用）
 type KeyToDepMap = Map<any,Dep>
 type EffectScheduler = (...args:any[]) => any
+
+export interface ReactiveEffectOptions {
+    lazy?: boolean
+    scheduler?: EffectScheduler  
+}
 /**
  * WeakMap 的 key 类型为 any，value 的类型为 KeyToDepMap
  */
@@ -46,7 +51,6 @@ export  function trackEffects(dep: Dep) {
  * @param newValue key 对应的新值
  */
 export function trigger(target:object, key?:unknown,newValue?:unknown) {
-    console.log('trigger: 触发依赖');
     // 根据 target 获取存储的 Map 实例
     const depsMap = targetMap.get(target)
     if (!depsMap) return 
@@ -91,16 +95,25 @@ export function triggerEffect(effect: ReactiveEffect) {
    }
 }
 
+
 /**
  * effect 函数
  * @param fn 
  * @returns 以 ReactiveEffect 实例为 this 的执行函数
  */
-export function effect<T =any>(fn:() => T) {
+export function effect<T =any>(fn:() => T,options?: ReactiveEffectOptions) {
     // 实现 ReactiveEffect 实例
     const _effect = new ReactiveEffect(fn)
+
+    // 存在 options 会进行配置对象合并
+    if(options) {
+        extend(_effect,options)
+    }
+
+    if (!options || !options.lazy) {
     // 执行 run 函数（默认 effect 调用里的 fn 会执行一次）
-    _effect.run()
+        _effect.run()
+    }
 }
 
 /**
