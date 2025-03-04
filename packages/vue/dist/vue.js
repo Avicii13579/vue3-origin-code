@@ -514,7 +514,7 @@ var Vue = (function (exports) {
         }
         if (cb && deep) {
             var baseGetter_1 = getter;
-            // 新的getter通过调用baseGetter()来获取原始值，但可能在这个过程中触发依赖收集，确保所有嵌套属性都被追踪。
+            // 使用 traverse 递归访问触发 source 属性的 getter 方法
             getter = function () { return traverse(baseGetter_1()); };
         }
         var oldValue = {};

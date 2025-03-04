@@ -19,9 +19,15 @@
     /**
      * watch 的实现本质：ReactiveEffect + scheduler
      */
-    watch(state, (value, oldValue) => {
-      console.log('watch', value)
-    })
+    watch(
+      state,
+      (value, oldValue) => {
+        console.log('watch', value)
+      },
+      {
+        immediate: true
+      }
+    )
     setTimeout(() => {
       state.name = '李四'
     }, 2000)
