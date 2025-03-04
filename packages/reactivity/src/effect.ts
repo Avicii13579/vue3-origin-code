@@ -138,4 +138,6 @@ export  class ReactiveEffect<T = any> {
         // 执行 fn 函数
         return this.fn()
     }
+
+    stop() {}
 }

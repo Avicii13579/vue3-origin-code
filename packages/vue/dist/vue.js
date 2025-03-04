@@ -10,6 +10,8 @@ var Vue = (function (exports) {
     var isFunction = function (val) { return typeof val === 'function'; };
     // 合并对象
     var extend = Object.assign;
+    // 只读空对象
+    var EMPTY_OBJ = {};
 
     /******************************************************************************
     Copyright (c) Microsoft Corporation.
@@ -215,6 +217,7 @@ var Vue = (function (exports) {
             // 执行 fn 函数
             return this.fn();
         };
+        ReactiveEffect.prototype.stop = function () { };
         return ReactiveEffect;
     }());
 
@@ -290,12 +293,17 @@ var Vue = (function (exports) {
         }
         // 未代理则生成 proxy 实例
         var proxy = new Proxy(target, baseHandlers);
+        // 为 Reactive 增加标记
+        proxy["__v_isReactive" /* ReactiveFlags.IS_REACTIVE */] = true;
         // 缓存代理对象
         proxyMap.set(target, proxy);
         return proxy;
     }
     // 对复杂对象进行响应性处理
     var toReactive = function (value) { return isObject(value) ? reactive(value) : value; };
+    function isReactive(value) {
+        return !!(value && value["__v_isReactive" /* ReactiveFlags.IS_REACTIVE */]);
+    }
 
     /**
      * ref 入口
@@ -429,10 +437,134 @@ var Vue = (function (exports) {
         return cRef;
     }
 
+    // 对应 promise 的 pending 状态
+    var isFlushPending = false;
+    // 创建异步任务 安排异步任务在当前同步代码执行完毕后立即执行
+    var resolvedPromise = Promise.resolve();
+    // 待执行的任务队列
+    var pendingPreFlushCbs = [];
+    /**
+     * 队列预处理函数
+     * @param cb
+     */
+    function queuePreFlushCb(cb) {
+        queueCb(cb, pendingPreFlushCbs);
+    }
+    /**
+     * 队列处理函数
+     * @param cb
+     * @param pendingQueue
+     */
+    function queueCb(cb, pendingQueue) {
+        // 将回调函数放入队列
+        pendingQueue.push(cb);
+        queueFlush();
+    }
+    /**
+     * 处理当前执行函数，并对 currentFlushPromise 进行复赋值
+     */
+    function queueFlush() {
+        if (!isFlushPending) {
+            isFlushPending = true;
+            // 防止阻止主线执行 将其扔到微任务中去执行
+            resolvedPromise.then(flushJobs);
+        }
+    }
+    /**
+     * 执行回调函数，并修改执行状态
+     */
+    function flushJobs() {
+        isFlushPending = false;
+        flushPreFlushCbs();
+    }
+    /**
+     * 依次处理队列中的任务
+     */
+    function flushPreFlushCbs() {
+        if (pendingPreFlushCbs.length) {
+            // 若待执行队列长度不为空 去重（防止绑定多依赖的回调函数被重复执行）
+            var activePreFlushCbs = __spreadArray([], __read(new Set(pendingPreFlushCbs)), false);
+            pendingPreFlushCbs.length = 0;
+            for (var i = 0; i < activePreFlushCbs.length; i++) {
+                activePreFlushCbs[i]();
+            }
+        }
+    }
+
+    /**
+     * 指定 watch 函数
+     * @param source 监听的响应性数据
+     * @param cd 回调函数
+     * @param options 配置迹象
+     * @returns
+     */
+    function watch(source, cb, options) {
+        return doWatch(source, cb, options);
+    }
+    function doWatch(source, cb, _a) {
+        var _b = _a === void 0 ? EMPTY_OBJ : _a, immediate = _b.immediate, deep = _b.deep;
+        var getter;
+        if (isReactive(source)) {
+            // getter 是一个返回 source 的函数
+            getter = function () { return source; };
+            deep = true;
+        }
+        else {
+            getter = function () { };
+        }
+        if (cb && deep) {
+            var baseGetter_1 = getter;
+            // 新的getter通过调用baseGetter()来获取原始值，但可能在这个过程中触发依赖收集，确保所有嵌套属性都被追踪。
+            getter = function () { return traverse(baseGetter_1()); };
+        }
+        var oldValue = {};
+        // job 函数
+        var job = function () {
+            if (cb) {
+                var newValue = effect.run();
+                if (deep || hasChanged(newValue, oldValue)) {
+                    cb(newValue, oldValue);
+                    oldValue = newValue;
+                }
+            }
+        };
+        var scheduler = function () { return queuePreFlushCb(job); };
+        var effect = new ReactiveEffect(getter, scheduler);
+        if (cb) {
+            if (immediate) {
+                // 直接执行一次
+                job();
+            }
+            else {
+                oldValue = effect.run();
+            }
+        }
+        else {
+            effect.run();
+        }
+        return function () {
+            effect.stop();
+        };
+    }
+    /**
+     * 依次执行 getter 从而触发依赖收集
+     */
+    function traverse(value) {
+        if (!isObject(value)) {
+            return value;
+        }
+        for (var key in value) {
+            traverse(value[key]);
+        }
+        return value;
+    }
+
     exports.computed = computed;
     exports.effect = effect;
+    exports.queuePreFlushCb = queuePreFlushCb;
     exports.reactive = reactive;
     exports.ref = ref;
+    exports.watch = watch;
 
     Object.defineProperty(exports, '__esModule', { value: true });
 

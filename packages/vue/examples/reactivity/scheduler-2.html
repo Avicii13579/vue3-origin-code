@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>scheduler</title>
+    <title>scheduler2</title>
     <script src="../../dist/vue.js"></script>
   </head>
   <body>
@@ -11,20 +11,26 @@
   </body>
 
   <script>
-    const { reactive, effect } = Vue
+    const { reactive, effect, queuePreFlushCb } = Vue
     const obj = reactive({
       count: 1
     })
     effect(
       () => {
         console.log(obj.count)
+      },
+      {
+        scheduler() {
+          queuePreFlushCb(() => {
+            console.log(obj.count)
+          })
+        }
       }
-      // {
-      //   lazy: true
-      // }
     )
 
+    // 注意：每次修改的时候会触发 setter -> trigger -> triggerEffects -> triggerEffect 直到触发 effect 的回调 fn 函数
     obj.count = 2
+    obj.count = 3
     console.log('代码结束')
   </script>
 </html>
