@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mount & patch</title>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <script>
+      const VNode = {
+        type: 'div',
+        children: 'hello render'
+      }
+      const VNode2 = {
+        type: 'div',
+        children: 'patch render'
+      }
+
+      function render(oldVNode, newVNode, container) {
+        if (!oldVNode) {
+          // 不存在 oldVNode 时默认为全新的渲染 就是挂载
+          mount(newVNode, container)
+        } else {
+          // 对比更新
+          patch(oldVNode, newVNode, container)
+        }
+      }
+
+      function mount(vnode, container) {
+        // 创建指定标签
+        const ele = document.createElement(vnode.type)
+        ele.innerText = vnode.children
+        // 插入 body
+        container.appendChild(ele)
+      }
+
+      function unmount(container) {
+        container.innerText = ''
+      }
+
+      function patch(oldVNode, newVNode, container) {
+        unmount(container)
+
+        const ele = document.createElement(newVNode.type)
+        ele.innerText = newVNode.children
+        // 插入 body
+        container.appendChild(ele)
+      }
+
+      render(null, VNode, document.querySelector('#app'))
+
+      setTimeout(() => {
+        render(VNode, VNode2, document.querySelector('#app'))
+      }, 2000)
+    </script>
+  </body>
+</html>
