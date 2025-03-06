@@ -1,3 +1,4 @@
+// 注意：此处采用 位运算 可以提高效率
 export const enum ShapeFlags {
   // type = element
   ELEMENT = 1,

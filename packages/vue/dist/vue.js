@@ -560,6 +560,38 @@ var Vue = (function (exports) {
         return value;
     }
 
+    function normalizeClass(value) {
+        var res = '';
+        if (isString(value)) {
+            res = value;
+        }
+        // class 数组增强
+        else if (isArray(value)) {
+            for (var i = 0; i < value.length; i++) {
+                // 循环数组里的值 递归获取 class 的值
+                var normalized = normalizeClass(value[i]);
+                if (normalized) {
+                    res += normalized + ' ';
+                }
+            }
+        }
+        // class 对象增强
+        else if (isObject(value)) {
+            for (var name_1 in value) {
+                // 得到对象的每个 key
+                if (value[name_1]) {
+                    res += name_1 + ' ';
+                }
+            }
+        }
+        // 去除字符串左右空格
+        return res.trim();
+    }
+
+    // 用 Symbol 创建唯一标识符
+    var Fragment = Symbol('Fragment');
+    var Text = Symbol('Text');
+    var Comment = Symbol('Comment');
     function isVNode(value) {
         return value ? value.__v_isVNode === true : false;
     }
@@ -571,7 +603,13 @@ var Vue = (function (exports) {
      * @returns vnode 对象
      */
     function createVNode(type, props, children) {
-        var shapeFlag = isString(type) ? 1 /* ShapeFlags.ELEMENT */ : 0;
+        var shapeFlag = isString(type) ? 1 /* ShapeFlags.ELEMENT */ : isObject(type) ? 4 /* ShapeFlags.STATEFUL_COMPONENT */ : 0;
+        if (props) {
+            var klass = props.class; props.style;
+            if (klass && !isString(klass)) {
+                props.class = normalizeClass(klass);
+            }
+        }
         return createBaseVNode(type, props, children, shapeFlag);
     }
     /**
@@ -603,7 +641,9 @@ var Vue = (function (exports) {
         if (children == null) {
             children = null;
         }
-        else if (isArray(children)) ;
+        else if (isArray(children)) {
+            type = 16 /* ShapeFlags.ARRAY_CHILDREN */;
+        }
         else if (typeof children === 'object') ;
         else if (isFunction(children)) ;
         else {
@@ -647,6 +687,9 @@ var Vue = (function (exports) {
         }
     }
 
+    exports.Comment = Comment;
+    exports.Fragment = Fragment;
+    exports.Text = Text;
     exports.computed = computed;
     exports.effect = effect;
     exports.h = h;

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="../../dist/vue.js"></script>
+    <title>h 的 other 实现</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const { h, Text, Comment, Fragment } = Vue
+
+      // Text 组件 文本节点生成
+      const vnodeText = h(Text, '这是一个 Text')
+      console.log(vnodeText) // vnode 的 type 是 Symbol(Text)
+
+      // Comment 组件 注释节点生成
+      const vnodeComment = h(Comment, '这是一个 Comment')
+      console.log(vnodeComment) // vnode 的 type 是 Symbol(Comment)
+
+      // Comment 组件 片段生成
+      const vnodeFragment = h(Fragment, [h(Text, '这是一个 Fragment')])
+      console.log(vnodeFragment) // vnode 的 type 是 Symbol(Fragment)
+    </script>
+  </body>
+</html>

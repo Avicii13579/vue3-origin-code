@@ -1,4 +1,5 @@
-import { isArray, isFunction, isString } from "@vue/shared"
+import { isArray, isFunction, isObject, isString } from "@vue/shared"
+import { normalizeClass } from "packages/shared/src/normalizeProp"
 import { ShapeFlags } from "packages/shared/src/shapeFlags"
 
 export interface VNode {
@@ -8,6 +9,11 @@ export interface VNode {
     children: any
     shapeFlag:number
 }
+
+// 用 Symbol 创建唯一标识符
+export const Fragment = Symbol('Fragment')
+export const Text = Symbol('Text')
+export const Comment = Symbol('Comment')
 
 export function isVNode(value:any): value is VNode {
     return value ? value.__v_isVNode === true : false
@@ -21,7 +27,14 @@ export function isVNode(value:any): value is VNode {
  * @returns vnode 对象
  */
 export function createVNode(type: any, props?: any, children?: any): VNode {
-   const shapeFlag = isString(type) ? ShapeFlags.ELEMENT : 0
+   const shapeFlag = isString(type) ? ShapeFlags.ELEMENT : isObject(type) ? ShapeFlags.STATEFUL_COMPONENT : 0
+
+   if(props) {
+    let {class: klass, style} = props
+    if(klass && !isString(klass)) {
+        props.class = normalizeClass(klass)
+    }
+   }
    return createBaseVNode(type, props, children, shapeFlag)
 }
 
@@ -56,7 +69,7 @@ export function normalizeChildren(vnode: VNode, children: unknown) {
     if(children == null) {
         children = null
     } else if(isArray(children)) {
-
+        type = ShapeFlags.ARRAY_CHILDREN
     } else if(typeof children === 'object') {
 
     } else if(isFunction(children)) {
