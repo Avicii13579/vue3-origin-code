@@ -10,3 +10,7 @@ export const isString = (val: unknown): val is string => typeof val === 'string'
 export const extend = Object.assign
 // 只读空对象
 export const EMPTY_OBJ: {readonly [key:string]:any} = {}
+
+// 判断是否为 on 开头
+const onRE = /^on[^a-z]/
+export const isOn = (key: string) => onRE.test(key)
