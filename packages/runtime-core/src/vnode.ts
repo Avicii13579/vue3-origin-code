@@ -8,6 +8,7 @@ export interface VNode {
     props: any
     children: any
     shapeFlag:number
+    key: any
 }
 
 // 用 Symbol 创建唯一标识符

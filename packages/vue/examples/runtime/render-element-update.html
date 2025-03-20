@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="../../dist/vue.js"></script>
+    <title>render 相同类型 element 的</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const { render, h } = Vue
+      const vnode = h(
+        'div',
+        {
+          class: 'test'
+        },
+        'hello render'
+      )
+      render(vnode, document.getElementById('app'))
+
+      // 更新操作
+      setTimeout(() => {
+        const vnode2 = h(
+          'div',
+          {
+            class: 'active'
+          },
+          'update'
+        )
+        render(vnode2, document.getElementById('app'))
+      }, 2000)
+    </script>
+  </body>
+</html>

@@ -13,6 +13,13 @@ var Vue = (function (exports) {
     var extend = Object.assign;
     // 只读空对象
     var EMPTY_OBJ = {};
+    // 判断是否为 on 开头
+    var onRE = /^on[^a-z]/;
+    var isOn = function (key) { return onRE.test(key); };
+    // 判断是否为同类型节点
+    var isSameVNodeType = function (n1, n2) {
+        return n1.type === n2.type && n1.key === n2.key;
+    };
 
     /******************************************************************************
     Copyright (c) Microsoft Corporation.
@@ -590,8 +597,8 @@ var Vue = (function (exports) {
 
     // 用 Symbol 创建唯一标识符
     var Fragment = Symbol('Fragment');
-    var Text = Symbol('Text');
-    var Comment = Symbol('Comment');
+    var Text$1 = Symbol('Text');
+    var Comment$1 = Symbol('Comment');
     function isVNode(value) {
         return value ? value.__v_isVNode === true : false;
     }
@@ -687,15 +694,225 @@ var Vue = (function (exports) {
         }
     }
 
-    exports.Comment = Comment;
+    // 封装 element 操作
+    var doc = document;
+    var nodeOps = {
+        // 插入元素到指定位置
+        insert: function (child, parent, anchor) {
+            parent.insertBefore(child, anchor || null);
+        },
+        // 创建指定的 Element
+        createElement: function (tag) {
+            var el = doc.createElement(tag);
+            return el;
+        },
+        // 为指定的 element 设置 textContent
+        setElementText: function (el, text) {
+            el.textContent = text;
+        },
+        // 删除指定元素: 需要获取起父级元素
+        remove: function (el) {
+            var parent = el.parentNode;
+            if (parent) {
+                parent.removeChild(el);
+            }
+        }
+    };
+
+    function patchClass(el, value) {
+        if (value == null) {
+            el.removeAttribute('class');
+        }
+        else {
+            // TODO 若存在多个 class 会全部存在 value 里吗？
+            el.className = value;
+        }
+    }
+
+    // 封装 props 操作
+    var patchProp = function (el, key, prevValue, nextValue) {
+        if (key === 'class') {
+            patchClass(el, nextValue);
+        }
+        else if (key === 'style') ;
+        else if (isOn(key)) ;
+        else ;
+    };
+
+    // 创建渲染器
+    /**
+     * 注意：传入的 options 必须包含 RendererOptions 的所有属性
+     *  Partial<RendererOptions> 可以只包含部分属性
+     * @param options 这个 options 从 packages/runtime-dom/src/index.ts 传入，属性是 nodeOps 和 patchProps 的合并对象
+     * @returns
+     */
+    function createRenderer(options) {
+        return baseCreateRenderer(options);
+    }
+    /**
+     * 生成 renderer 渲染器
+     * @param options 兼容性操作配置对象
+     */
+    function baseCreateRenderer(options) {
+        // 解构 options
+        var hostInsert = options.insert, hostPatchProp = options.patchProp, hostCreateElement = options.createElement, hostSetElementText = options.setElementText, hostRemove = options.remove;
+        // Element 打补丁操作
+        var processElement = function (oldVNode, newVNode, container, anchor) {
+            if (oldVNode == null) {
+                // 挂载操作
+                mountElement(newVNode, container, anchor);
+            }
+            else {
+                // 更新操作
+                patchElement(oldVNode, newVNode);
+            }
+        };
+        // 挂载元素
+        var mountElement = function (vnode, container, anchor) {
+            var type = vnode.type, props = vnode.props, shapeFlag = vnode.shapeFlag;
+            // 创建 element
+            var el = (vnode.el = hostCreateElement(type));
+            if (shapeFlag & 8 /* ShapeFlags.TEXT_CHILDREN */) {
+                // 设置为文本节点
+                hostSetElementText(el, vnode.children);
+            }
+            // 处理 props
+            if (props) {
+                for (var key in props) {
+                    hostPatchProp(el, key, null, props[key]);
+                }
+            }
+            // 插入 el 到指定位置
+            hostInsert(el, container, anchor);
+        };
+        var patch = function (oldVNode, newVNode, container, anchor) {
+            if (anchor === void 0) { anchor = null; }
+            if (oldVNode === newVNode) {
+                return;
+            }
+            // 判断若不是相同类型的节点，则卸载旧节点
+            if (oldVNode && !isSameVNodeType(oldVNode, newVNode)) {
+                unmount(oldVNode);
+                oldVNode = null;
+            }
+            var shapeFlag = newVNode.shapeFlag, type = newVNode.type;
+            switch (type) {
+                case Text:
+                    break;
+                case Comment:
+                    break;
+                case Fragment:
+                    break;
+                default:
+                    if (shapeFlag & 1 /* ShapeFlags.ELEMENT */) {
+                        processElement(oldVNode, newVNode, container, anchor);
+                    }
+            }
+        };
+        var render = function (vnode, container) {
+            if (vnode == null) {
+                // 卸载
+                if (container._vnode) {
+                    unmount(container._vnode);
+                }
+            }
+            else {
+                // 打补丁（包括更新和挂载）
+                patch(container._vnode || null, vnode, container);
+            }
+            container._vnode = vnode;
+        };
+        var unmount = function (vnode) {
+            hostRemove(vnode.el); // 确保 el 存在
+        };
+        // 对比节点 进行更新操作
+        var patchElement = function (oldVNode, newVNode) {
+            // 获取旧的 DOM元素，复用这个 DOM 给新的虚拟节点 el 属性赋值；同时将这个
+            var el = (newVNode.el = oldVNode.el);
+            var oldProps = oldVNode.props || EMPTY_OBJ;
+            var newProps = newVNode.props || EMPTY_OBJ;
+            // 更新子节点
+            patchChildren(oldVNode, newVNode, el);
+            // 更新 props
+            patchProps(el, newVNode, oldProps, newProps);
+        };
+        var patchChildren = function (oldVNode, newVNode, container, anchor) {
+            // 旧节点
+            var c1 = oldVNode && oldVNode.children;
+            var prevShapeFlag = oldVNode ? oldVNode.shapeFlag : 0;
+            // 新节点
+            var c2 = newVNode.children;
+            var shapeFlag = newVNode.shapeFlag;
+            // 新节点是文本节点
+            if (shapeFlag & 8 /* ShapeFlags.TEXT_CHILDREN */) {
+                // 若 c1 不等于 c2 guagua
+                if (c1 !== c2) {
+                    // 设置为文本节点
+                    hostSetElementText(container, c2);
+                }
+            }
+            else {
+                // 旧节点是数组节点
+                if (prevShapeFlag & 16 /* ShapeFlags.ARRAY_CHILDREN */) ;
+                else {
+                    // 旧节点为 Text_CHILDREN
+                    if (prevShapeFlag & 8 /* ShapeFlags.TEXT_CHILDREN */) {
+                        // 删除旧节点的文本
+                        hostSetElementText(container, '');
+                    }
+                }
+            }
+        };
+        // 为 props 打补丁
+        var patchProps = function (el, vnode, oldProps, newProps) {
+            if (oldProps !== newProps) {
+                // 1、遍历新的 props 赋值
+                for (var key in newProps) {
+                    var prev = oldProps[key];
+                    var next = newProps[key];
+                    if (prev !== next) {
+                        hostPatchProp(el, key, prev, next);
+                    }
+                }
+                // 遍历旧的 props 若新的里面不存在，则删除
+                for (var key in oldProps) {
+                    if (!(key in newProps)) {
+                        hostPatchProp(el, key, oldProps[key], null);
+                    }
+                }
+            }
+        };
+        return {
+            render: render
+        };
+    }
+
+    // 合并配置对象
+    var rendererOptions = extend({ patchProp: patchProp }, nodeOps);
+    var renderer;
+    function ensureRenderer() {
+        return renderer || (renderer = createRenderer(rendererOptions));
+    }
+    var render = function () {
+        var _a;
+        var args = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+            args[_i] = arguments[_i];
+        }
+        // ensureRenderer() 返回的是个 renderer 实例，我们要调用它的 render 方法
+        (_a = ensureRenderer()).render.apply(_a, __spreadArray([], __read(args), false));
+    };
+
+    exports.Comment = Comment$1;
     exports.Fragment = Fragment;
-    exports.Text = Text;
+    exports.Text = Text$1;
     exports.computed = computed;
     exports.effect = effect;
     exports.h = h;
     exports.queuePreFlushCb = queuePreFlushCb;
     exports.reactive = reactive;
     exports.ref = ref;
+    exports.render = render;
     exports.watch = watch;
 
     Object.defineProperty(exports, '__esModule', { value: true });

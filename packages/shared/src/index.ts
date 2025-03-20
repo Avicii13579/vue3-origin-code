@@ -1,3 +1,5 @@
+import { VNode } from "packages/runtime-core/src/vnode"
+
 export const isArray = Array.isArray
 // 判断是否为一个对象
 export const isObject = (value:unknown) => value !== null && typeof value === 'object'
@@ -14,3 +16,8 @@ export const EMPTY_OBJ: {readonly [key:string]:any} = {}
 // 判断是否为 on 开头
 const onRE = /^on[^a-z]/
 export const isOn = (key: string) => onRE.test(key)
+
+// 判断是否为同类型节点
+export const isSameVNodeType = (n1: VNode, n2: VNode) => {
+    return n1.type === n2.type && n1.key === n2.key
+}
