@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <div id="app1"></div>
+    <div id="app2"></div>
+    <script>
+      const app1 = document.querySelector('#app1')
+      const app2 = document.querySelector('#app2')
+
+      // 操作 classname 性能对比
+      console.time('classname')
+      for (let i = 0; i < 10000; i++) {
+        app1.className = 'className'
+      }
+      console.timeEnd('classname')
+
+      // 操作 attribute 性能对比
+      console.time('attribute')
+      for (let i = 0; i < 10000; i++) {
+        app2.setAttribute('class', 'className')
+      }
+      console.timeEnd('attribute')
+
+      // TODO 结论：操作 classname 性能比操作 attribute 性能好
+    </script>
+  </body>
+</html>

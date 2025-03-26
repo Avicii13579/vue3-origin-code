@@ -729,6 +729,26 @@ var Vue = (function (exports) {
         }
     }
 
+    // 设置元素属性
+    function patchAttr(el, key, value) {
+        if (value == null) {
+            el.removeAttribute(key);
+        }
+        else {
+            el.setAttribute(key, value);
+        }
+    }
+
+    // 通过 DOM Properties 指定属性
+    function patchDOMProp(el, key, value) {
+        try {
+            el[key] = value;
+        }
+        catch (e) {
+            console.error(e);
+        }
+    }
+
     // 封装 props 操作
     var patchProp = function (el, key, prevValue, nextValue) {
         if (key === 'class') {
@@ -736,8 +756,36 @@ var Vue = (function (exports) {
         }
         else if (key === 'style') ;
         else if (isOn(key)) ;
-        else ;
+        else if (shouldSetAsProp(el, key)) {
+            // 通过 DOM properties 设置
+            patchDOMProp(el, key, nextValue);
+        }
+        else {
+            // 其他属性
+            patchAttr(el, key, nextValue);
+        }
     };
+    /**
+     * 判断是否应该通过 DOM properties 设置
+     * @param el
+     * @param key
+     * @param value
+     */
+    function shouldSetAsProp(el, key, value) {
+        // TODO #1787,#2840 表单元素的表单属性是只读的，必须设置为属性为 attribute
+        if (key === 'form') {
+            return false;
+        }
+        // TODO #1526 必须设置为 attribute
+        if (key === 'list' && el.tagName === 'INPUT') {
+            return false;
+        }
+        // TODO #2766 必须设置为 attribute
+        if (key === 'type' && el.tagName === 'TEXTAREA') {
+            return false;
+        }
+        return key in el;
+    }
 
     // 创建渲染器
     /**
