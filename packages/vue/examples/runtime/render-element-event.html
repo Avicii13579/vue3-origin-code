@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="../../dist/vue.js"></script>
+    <title>h 函数的事件绑定</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const { render, h } = Vue
+      const vnode = h(
+        'button',
+        {
+          // 注意：这里不能写成 onclick 因为我们对元素事件的匹配规则是 onXxx 所以需要写成 onClick
+          onClick: () => {
+            alert('点击')
+          }
+        },
+        '点击'
+      )
+      render(vnode, document.getElementById('app'))
+
+      setTimeout(() => {
+        const vnode2 = h(
+          'button',
+          {
+            onDbClick: () => {
+              alert('双击')
+            }
+          },
+          '双击'
+        )
+        render(vnode2, document.getElementById('app'))
+      }, 2000)
+    </script>
+  </body>
+</html>

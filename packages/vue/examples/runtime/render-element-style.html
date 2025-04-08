@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="../../dist/vue.js"></script>
+    <title>h 函数的 style 属性获取测试</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const { render, h } = Vue
+      const vnode = h(
+        'div',
+        {
+          style: {
+            color: 'red',
+            fontSize: '14px'
+          }
+        },
+        'hello'
+      )
+      render(vnode, document.getElementById('app'))
+
+      setTimeout(() => {
+        const vnode2 = h(
+          'div',
+          {
+            style: {
+              color: 'blue',
+              fontSize: '16px'
+            }
+          },
+          'hello'
+        )
+        render(vnode2, document.getElementById('app'))
+      }, 1000)
+    </script>
+  </body>
+</html>

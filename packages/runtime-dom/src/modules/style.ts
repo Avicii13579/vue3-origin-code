@@ -11,7 +11,7 @@ export function patchStyle(el:Element,prev,next) {
         for(let key in next) {
             setStyle(style, key, next[key])
         }
-
+        // 删除旧样式
         if(prev && !isString(prev)) {
             for(let key in prev) {
                 if(!next[key]) {

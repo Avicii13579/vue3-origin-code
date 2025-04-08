@@ -749,13 +749,86 @@ var Vue = (function (exports) {
         }
     }
 
+    function patchStyle(el, prev, next) {
+        var style = el.style;
+        var isCssString = isString(next);
+        /* vue 支持两种设置语法
+         * 1. 对象语法 :style="{ color: activeColor, fontSize: fontSize + 'px' }"
+         * 2. 字符串语法 :style="'color: red; font-size: 14px;'"
+         */
+        if (next && !isCssString) {
+            for (var key in next) {
+                setStyle(style, key, next[key]);
+            }
+            // 删除旧样式
+            if (prev && !isString(prev)) {
+                for (var key in prev) {
+                    if (!next[key]) {
+                        setStyle(style, key, '');
+                    }
+                }
+            }
+        }
+    }
+    function setStyle(style, name, val) {
+        style[name] = val;
+    }
+
+    // 为 event 事件打补丁
+    function patchEvent(el, rawName, prevValue, nextValue) {
+        // vei 为 vue event invokers
+        var invokers = el._vei || (el._vei = {});
+        var existingInvoker = invokers[rawName];
+        // 判断当前事件是否存在
+        if (existingInvoker && nextValue) {
+            // 若存在且有新的事件 直接更新值
+            existingInvoker.value = nextValue;
+        }
+        else {
+            // 获取事件名
+            var name_1 = parseName(rawName);
+            // 若否 先判断是否有限制 
+            if (nextValue) {
+                // 若有直接添加
+                var invoker = (invokers[rawName] = createInvoker(nextValue));
+                el.addEventListener(name_1, invoker);
+            }
+            else if (existingInvoker) {
+                // 若无直接删除
+                el.removeEventListener(name_1, existingInvoker);
+                invokers[rawName] = undefined;
+            }
+        }
+    }
+    // 切割事件名
+    function parseName(name) {
+        return name.slice(2).toLowerCase();
+    }
+    // 穿件事件存储对象
+    function createInvoker(initialValue) {
+        // invoker 是一个函数 参数为 e 只有当 invoker.value 存在时 才会执行 invoker.value()
+        var invoker = function (e) {
+            invoker.value && invoker.value();
+        };
+        // value 为事件
+        invoker.value = initialValue;
+        return invoker;
+    }
+
     // 封装 props 操作
     var patchProp = function (el, key, prevValue, nextValue) {
         if (key === 'class') {
+            // class 是字符串可以直接替换 不需要 prevValue
             patchClass(el, nextValue);
         }
-        else if (key === 'style') ;
-        else if (isOn(key)) ;
+        else if (key === 'style') {
+            // style
+            patchStyle(el, prevValue, nextValue);
+        }
+        else if (isOn(key)) {
+            // 事件
+            patchEvent(el, key, prevValue, nextValue);
+        }
         else if (shouldSetAsProp(el, key)) {
             // 通过 DOM properties 设置
             patchDOMProp(el, key, nextValue);

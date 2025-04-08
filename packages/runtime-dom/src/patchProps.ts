@@ -4,6 +4,8 @@ import { isOn } from "@vue/shared"
 import { patchClass } from "./modules/class"
 import { patchAttr } from "./modules/attr"
 import { patchDOMProp } from "./modules/props"
+import { patchStyle } from "./modules/style"
+import { patchEvent } from "./modules/events"
 
 export const patchProp = (el, key, prevValue, nextValue) => {
     if(key === 'class') {
@@ -14,6 +16,7 @@ export const patchProp = (el, key, prevValue, nextValue) => {
         patchStyle(el, prevValue,nextValue)
     } else if(isOn(key)) {
         // 事件
+        patchEvent(el, key, prevValue, nextValue)
     } else if(shouldSetAsProp(el, key, nextValue)) {
         // 通过 DOM properties 设置
         patchDOMProp(el, key, nextValue)
