@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="../../dist/vue.js"></script>
+    <title>render Fragment 的更新挂载</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const { render, h, Fragment } = Vue
+      const vnode = h(Fragment, 'hello111')
+      render(vnode, document.getElementById('app'))
+
+      setTimeout(() => {
+        const vnode2 = h(Fragment, 'hello222')
+        render(vnode2, document.getElementById('app'))
+      }, 2000)
+    </script>
+  </body>
+</html>

@@ -15,7 +15,14 @@ export const nodeOps = {
     setElementText: (el, text) => {
         el.textContent = text
     },
-
+    // 创建指定 Text 元素
+    createText: (text) => doc.createTextNode(text),
+    // 设置 text
+    setText: (node, text) => {
+        node.nodeValue = text
+    },
+    // 创建指定 Comment 元素
+    createComment: (text) =>  doc.createComment(text),
     // 删除指定元素: 需要获取起父级元素
     remove: (el) => {
         const parent = el.parentNode

@@ -710,6 +710,14 @@ var Vue = (function (exports) {
         setElementText: function (el, text) {
             el.textContent = text;
         },
+        // 创建指定 Text 元素
+        createText: function (text) { return doc.createTextNode(text); },
+        // 设置 text
+        setText: function (node, text) {
+            node.nodeValue = text;
+        },
+        // 创建指定 Comment 元素
+        createComment: function (text) { return doc.createComment(text); },
         // 删除指定元素: 需要获取起父级元素
         remove: function (el) {
             var parent = el.parentNode;
@@ -860,6 +868,20 @@ var Vue = (function (exports) {
         return key in el;
     }
 
+    // 标准化 VNode
+    function normalizeVNode(child) {
+        if (typeof child === 'object') {
+            return cloneIfMounted(child);
+        }
+        else {
+            return createVNode(Text, null, String(child));
+        }
+    }
+    // clone VNode
+    function cloneIfMounted(child) {
+        return child;
+    }
+
     // 创建渲染器
     /**
      * 注意：传入的 options 必须包含 RendererOptions 的所有属性
@@ -876,8 +898,8 @@ var Vue = (function (exports) {
      */
     function baseCreateRenderer(options) {
         // 解构 options
-        var hostInsert = options.insert, hostPatchProp = options.patchProp, hostCreateElement = options.createElement, hostSetElementText = options.setElementText, hostRemove = options.remove;
-        // Element 打补丁操作
+        var hostInsert = options.insert, hostPatchProp = options.patchProp, hostCreateElement = options.createElement, hostSetElementText = options.setElementText, hostCreateText = options.createText, hostSetText = options.setText, hostCreateComment = options.createComment, hostRemove = options.remove;
+        // Element 打补丁
         var processElement = function (oldVNode, newVNode, container, anchor) {
             if (oldVNode == null) {
                 // 挂载操作
@@ -886,6 +908,48 @@ var Vue = (function (exports) {
             else {
                 // 更新操作
                 patchElement(oldVNode, newVNode);
+            }
+        };
+        // Text 打补丁  注意：Text 节点属于叶子结点，不存在内部子节点
+        var processText = function (oldVNode, newVNode, container, anchor) {
+            if (oldVNode == null) {
+                // 生成节点 并挂载
+                newVNode.el = hostCreateText(newVNode.children);
+                hostInsert(newVNode.el, container, anchor);
+            }
+            else {
+                /**
+                 * 对 oldVnode.el 做非空判断；
+                 * 赋值给 newVNode.el;
+                 * 注意：JS 的赋值语句会返回被赋予的值
+                 */
+                var el = (newVNode.el = oldVNode.el);
+                if (newVNode.children !== oldVNode.children) {
+                    // 更新操作 参数一：目标元素 参数二：Text节点内容
+                    hostSetText(el, newVNode.children);
+                }
+            }
+        };
+        // Comment 打补丁
+        var processCommentNode = function (oldVNode, newVNode, container, anchor) {
+            if (oldVNode == null) {
+                // 挂载
+                newVNode.el = hostCreateComment(newVNode.children || '');
+                hostInsert(newVNode.el, container, anchor);
+            }
+            else {
+                // 无更新
+                newVNode.el = oldVNode.el;
+            }
+        };
+        // Fragment 打补丁：都是对子节点的操作
+        var processFragment = function (oldVNode, newVNode, container, anchor) {
+            if (oldVNode == null) {
+                mountChildren(newVNode.children, container, anchor);
+            }
+            else {
+                // 对比更新
+                patchChildren(oldVNode, newVNode, container);
             }
         };
         // 挂载元素
@@ -919,10 +983,13 @@ var Vue = (function (exports) {
             var shapeFlag = newVNode.shapeFlag, type = newVNode.type;
             switch (type) {
                 case Text:
+                    processText(oldVNode, newVNode, container, anchor);
                     break;
                 case Comment:
+                    processCommentNode(oldVNode, newVNode, container, anchor);
                     break;
                 case Fragment:
+                    processFragment(oldVNode, newVNode, container, anchor);
                     break;
                 default:
                     if (shapeFlag & 1 /* ShapeFlags.ELEMENT */) {
@@ -956,6 +1023,15 @@ var Vue = (function (exports) {
             patchChildren(oldVNode, newVNode, el);
             // 更新 props
             patchProps(el, newVNode, oldProps, newProps);
+        };
+        var mountChildren = function (children, container, anchor) {
+            if (isString(children)) {
+                children = children.split('');
+            }
+            for (var i = 0; i < children.length; i++) {
+                var child = (children[i] = normalizeVNode(children[i]));
+                patch(null, child, container, anchor);
+            }
         };
         var patchChildren = function (oldVNode, newVNode, container, anchor) {
             // 旧节点

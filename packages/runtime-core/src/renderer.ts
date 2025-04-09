@@ -1,6 +1,7 @@
 import { ShapeFlags } from "packages/shared/src/shapeFlags"
-import { Fragment, VNode } from "./vnode"
-import { EMPTY_OBJ, isSameVNodeType } from "@vue/shared"
+import { Fragment, normalizeChildren, VNode } from "./vnode"
+import { EMPTY_OBJ, isSameVNodeType, isString } from "@vue/shared"
+import { normalizeVNode } from "./componentRenderUtils"
 
 
 export interface RendererOptions {
@@ -12,6 +13,12 @@ export interface RendererOptions {
     insert(el, parent: Element, anchor?): void
     // 创建指定的 element
     createElement(type: string)
+    // 创建 Text 节点
+    createText(text: string)
+    // 设置 text 
+    setText(node, text): void
+    // 设置注释节点
+    createComment(text: string)
     // 卸载元素
     remove(el): void
 }
@@ -37,10 +44,13 @@ function baseCreateRenderer(options: RendererOptions):any {
         patchProp: hostPatchProp,
         createElement: hostCreateElement,
         setElementText: hostSetElementText,
+        createText: hostCreateText,
+        setText: hostSetText,
+        createComment: hostCreateComment,
         remove: hostRemove
     } = options
 
-    // Element 打补丁操作
+    // Element 打补丁
     const processElement = (oldVNode, newVNode, container, anchor) => {
         if(oldVNode == null) {
             // 挂载操作
@@ -48,6 +58,48 @@ function baseCreateRenderer(options: RendererOptions):any {
         } else {
             // 更新操作
             patchElement(oldVNode, newVNode)
+        }
+    }
+
+    // Text 打补丁  注意：Text 节点属于叶子结点，不存在内部子节点
+    const processText = (oldVNode, newVNode, container, anchor) => {
+        if (oldVNode == null) {
+            // 生成节点 并挂载
+            newVNode.el = hostCreateText(newVNode.children as string)
+            hostInsert(newVNode.el, container, anchor)
+        } else {
+            /**
+             * 对 oldVnode.el 做非空判断；
+             * 赋值给 newVNode.el;
+             * 注意：JS 的赋值语句会返回被赋予的值
+             */
+            const el = (newVNode.el = oldVNode.el!)
+            if(newVNode.children !== oldVNode.children) {
+                // 更新操作 参数一：目标元素 参数二：Text节点内容
+                hostSetText(el, newVNode.children as string)
+            }
+        }
+    }
+
+    // Comment 打补丁
+    const processCommentNode = (oldVNode, newVNode, container, anchor) => {
+        if(oldVNode == null) {
+            // 挂载
+            newVNode.el = hostCreateComment((newVNode.children as string) || '')
+            hostInsert(newVNode.el, container, anchor)
+        } else {
+            // 无更新
+            newVNode.el  = oldVNode.el
+        }
+    }
+
+    // Fragment 打补丁：都是对子节点的操作
+    const processFragment = (oldVNode, newVNode, container, anchor) => {
+        if(oldVNode == null) {
+            mountChildren(newVNode.children, container, anchor)
+        } else {
+            // 对比更新
+            patchChildren(oldVNode, newVNode, container, anchor)
         }
     }
 
@@ -91,10 +143,13 @@ function baseCreateRenderer(options: RendererOptions):any {
         const {shapeFlag, type} = newVNode
         switch(type) {
             case Text:
+                processText(oldVNode, newVNode, container, anchor)
                 break;
             case Comment: 
+                processCommentNode(oldVNode, newVNode, container,anchor)
                 break;
             case Fragment:
+                processFragment(oldVNode, newVNode, container, anchor)
                 break;
             default:
                 if(shapeFlag & ShapeFlags.ELEMENT) {
@@ -135,6 +190,17 @@ function baseCreateRenderer(options: RendererOptions):any {
 
         // 更新 props
         patchProps(el, newVNode, oldProps, newProps)
+    }
+
+    const mountChildren = (children, container, anchor) => {
+        if(isString(children)) {
+            children = children.split('')
+        } 
+        for(let i = 0; i < children.length; i++) {
+            const child = (children[i] = normalizeVNode(children[i]))
+            patch(null, child, container, anchor)
+        }
+        
     }
         
     const patchChildren = (oldVNode, newVNode, container, anchor) => {
@@ -205,6 +271,5 @@ function baseCreateRenderer(options: RendererOptions):any {
         render
     }
 }
-
 
 

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="../../dist/vue.js"></script>
+    <title>render Comment 节点</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const { render, h, Comment } = Vue
+      const vnode = h(Comment, 'hello')
+      // Comment 注释节点只有挂载操作
+      render(vnode, document.getElementById('app'))
+
+      setTimeout(() => {
+        const vnode2 = h(Comment, 'hello2')
+        console.log(vnode, vnode2)
+
+        // 注意：此处修改 Vue 并没有做更新
+        render(vnode2, document.getElementById('app'))
+      }, 2000)
+    </script>
+  </body>
+</html>
