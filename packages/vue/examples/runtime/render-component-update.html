@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="../../dist/vue.js"></script>
+    <title>render component 更新</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const { render, h, Text } = Vue
+      // 组件必须是个对象，且必须有 render 函数
+      const component = {
+        render() {
+          return h('div', 'hello')
+        }
+      }
+
+      const vnode = h(component)
+      render(vnode, document.getElementById('app'))
+
+      const component1 = {
+        render() {
+          return h('div', 'hello111')
+        }
+      }
+      const vnode1 = h(component1)
+      setTimeout(() => {
+        render(vnode1, document.getElementById('app'))
+      }, 2000)
+    </script>
+  </body>
+</html>

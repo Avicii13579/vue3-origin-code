@@ -11,12 +11,18 @@
 
     <script>
       const { h } = Vue
-
+      /**
+       * 注意：Vue 为种元素都使用 按位或 运算加了唯一的标识
+       * 如：根节点为 div 子节点为数组时，shapeFlag 为 17
+       * 如：根节点为 div 子节点为文本时，shapeFlag 为 9
+       */
+      // 先执行数组里的 h函数 （vnode 的执行是自内向外的 先执行子节点）
       const vnode = h('div', { class: 'test' }, [
         h('p', 'p1'),
         h('p', 'p2'),
         h('p', 'p3')
       ])
+
       console.log(vnode)
     </script>
   </body>

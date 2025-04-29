@@ -66,11 +66,10 @@ export function createBaseVNode(type, props, children, shapeFlag) {
  */
 export function normalizeChildren(vnode: VNode, children: unknown) {
     let type = 0
-    const {shapeFlag}= vnode
     if(children == null) {
         children = null
     } else if(isArray(children)) {
-        type = ShapeFlags.ARRAY_CHILDREN
+        type = ShapeFlags.ARRAY_CHILDREN // 数组子节点位运算后为 16
     } else if(typeof children === 'object') {
 
     } else if(isFunction(children)) {
@@ -81,5 +80,13 @@ export function normalizeChildren(vnode: VNode, children: unknown) {
     }
 
     vnode.children = children
-    vnode.shapeFlag |= type
+    vnode.shapeFlag |= type 
+    /**
+     * Element 1 按位或 子节点为 Array 16  = 17 下面这个 vnode 的 shapeFlag 为 17
+     * const vnode = h('div', { class: 'test' }, [
+        h('p', 'p1'),
+        h('p', 'p2'),
+        h('p', 'p3')
+      ])
+     */
 }

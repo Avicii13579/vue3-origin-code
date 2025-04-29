@@ -1,7 +1,10 @@
 import { ShapeFlags } from "packages/shared/src/shapeFlags"
 import { Fragment, normalizeChildren, VNode } from "./vnode"
 import { EMPTY_OBJ, isSameVNodeType, isString } from "@vue/shared"
-import { normalizeVNode } from "./componentRenderUtils"
+import { normalizeVNode, renderComponentRoot } from "./componentRenderUtils"
+import { createComponentInstance, setupComponent } from "./component"
+import { ReactiveEffect } from "packages/reactivity/src/effect"
+import { queuePreFlushCb } from "./scheduler"
 
 
 export interface RendererOptions {
@@ -103,6 +106,14 @@ function baseCreateRenderer(options: RendererOptions):any {
         }
     }
 
+    // 组件打补丁
+    const processComponent = (oldVNode, newVNode, contianer, anchor) => {
+        if(oldVNode == null) {
+            // 挂载组件
+            mountComponent(newVNode,contianer, anchor)
+        }
+    }
+
     // 挂载元素
     const mountElement = (vnode, container, anchor) => {
         const {type, props, shapeFlag} = vnode
@@ -127,6 +138,18 @@ function baseCreateRenderer(options: RendererOptions):any {
 
         // 插入 el 到指定位置
         hostInsert(el, container, anchor)
+    }
+
+    // 挂载组件
+    const mountComponent = (initialVNode, container, anchor) => {
+        // 生成组件实例
+        initialVNode.component = createComponentInstance(initialVNode)
+
+        const instance = initialVNode.component
+        // 标准化组件实例数据
+        setupComponent(instance)
+        // 设置组件渲染
+        setupRenderEffect(instance, initialVNode, container, anchor)
     }
 
     const patch = (oldVNode, newVNode, container, anchor = null) => {
@@ -155,7 +178,8 @@ function baseCreateRenderer(options: RendererOptions):any {
                 if(shapeFlag & ShapeFlags.ELEMENT) {
                     processElement(oldVNode, newVNode, container, anchor)
                 } else if (shapeFlag & ShapeFlags.COMPONENT) {
-
+                    // 组件
+                    processComponent(oldVNode, newVNode, container, anchor)
                 }
 
         }
@@ -265,6 +289,34 @@ function baseCreateRenderer(options: RendererOptions):any {
                 }
             }
         }
+    }
+
+    const setupRenderEffect = (instance, initialVNode, container, anchor) => {
+        // 组件挂载和更新的方法
+        const componentUpdateFn = () => {
+            // 挂载之前
+            if(!instance.insMounted) {
+                // 获取渲染内容
+                const subTree = (instance.subTree = renderComponentRoot(instance))
+
+                // 通过 patch 对 subTree 打补丁
+                patch(null, subTree, container, anchor)
+
+                // 根节点赋值
+                initialVNode.el = subTree.el
+            } else {}
+        }
+
+        // 创建包含 scheduler 的 effect 实例
+        const effect = (instance.effect = new ReactiveEffect(
+            componentUpdateFn,
+            () => queuePreFlushCb(update)
+        ))
+
+        // 生成 update 函数
+        const update = (instance.update = () => effect.run())
+        // 本质触发 componentUpdateFn
+        update() 
     }
 
     return {

@@ -881,6 +881,67 @@ var Vue = (function (exports) {
     function cloneIfMounted(child) {
         return child;
     }
+    // 解析 render 函数的返回值
+    function renderComponentRoot(instance) {
+        var vnode = instance.vnode, render = instance.render, data = instance.data;
+        var result;
+        try {
+            // 按位与 思路：在 Vue 的虚拟 DOM 实现中，每个 vnode 都有一个 shapeFlag 属性，它是一个位掩码，用于标识该节点的类型和特性。
+            // 当使用 & 操作符时，如果结果为非零值，表示该 vnode 确实具有 STATEFUL_COMPONENT 这个特性。
+            if (vnode.shapeFlag & 4 /* ShapeFlags.STATEFUL_COMPONENT */) {
+                // 修改 render 的 this，并获取返回值
+                result = normalizeVNode(render.call(data));
+            }
+        }
+        catch (err) {
+            console.log(err);
+        }
+        return result;
+    }
+
+    var uid = 0;
+    // 创建组件实例
+    function createComponentInstance(vnode) {
+        var type = vnode.type;
+        var instance = {
+            uid: uid++,
+            vnode: vnode,
+            type: type,
+            subTree: null,
+            effect: null,
+            update: null,
+            render: null // 组件内部的 render 函数
+        };
+        return instance;
+    }
+    // 初始化组件属性
+    function setupComponent(instance) {
+        // 将 render 赋值到 instance.render 上
+        var setupResult = setupStatefullComponent(instance);
+        return setupResult;
+    }
+    function setupStatefullComponent(instance) {
+        finishComponentSetup(instance);
+    }
+    // 为 instance 绑定 render 属性
+    function finishComponentSetup(instance) {
+        var Component = instance.type;
+        instance.render = Component.render;
+        // 处理 instance 上的 data 属性
+        applyOptions(instance);
+    }
+    function applyOptions(instance) {
+        var dataOptions = instance.type.data;
+        // dataOptions 是组件里的 data 函数
+        if (dataOptions) {
+            // 获取data
+            var data = dataOptions();
+            if (isObject(data)) {
+                // 如果是个对象 就对其响应式处理 并赋值给 data
+                instance.data = reactive(data);
+            }
+        }
+    }
 
     // 创建渲染器
     /**
@@ -952,6 +1013,13 @@ var Vue = (function (exports) {
                 patchChildren(oldVNode, newVNode, container);
             }
         };
+        // 组件打补丁
+        var processComponent = function (oldVNode, newVNode, contianer, anchor) {
+            if (oldVNode == null) {
+                // 挂载组件
+                mountComponent(newVNode, contianer, anchor);
+            }
+        };
         // 挂载元素
         var mountElement = function (vnode, container, anchor) {
             var type = vnode.type, props = vnode.props, shapeFlag = vnode.shapeFlag;
@@ -969,6 +1037,16 @@ var Vue = (function (exports) {
             }
             // 插入 el 到指定位置
             hostInsert(el, container, anchor);
+        };
+        // 挂载组件
+        var mountComponent = function (initialVNode, container, anchor) {
+            // 生成组件实例
+            initialVNode.component = createComponentInstance(initialVNode);
+            var instance = initialVNode.component;
+            // 标准化组件实例数据
+            setupComponent(instance);
+            // 设置组件渲染
+            setupRenderEffect(instance, initialVNode, container, anchor);
         };
         var patch = function (oldVNode, newVNode, container, anchor) {
             if (anchor === void 0) { anchor = null; }
@@ -994,6 +1072,10 @@ var Vue = (function (exports) {
                 default:
                     if (shapeFlag & 1 /* ShapeFlags.ELEMENT */) {
                         processElement(oldVNode, newVNode, container, anchor);
+                    }
+                    else if (shapeFlag & 6 /* ShapeFlags.COMPONENT */) {
+                        // 组件
+                        processComponent(oldVNode, newVNode, container, anchor);
                     }
             }
         };
@@ -1078,6 +1160,26 @@ var Vue = (function (exports) {
                     }
                 }
             }
+        };
+        var setupRenderEffect = function (instance, initialVNode, container, anchor) {
+            // 组件挂载和更新的方法
+            var componentUpdateFn = function () {
+                // 挂载之前
+                if (!instance.insMounted) {
+                    // 获取渲染内容
+                    var subTree = (instance.subTree = renderComponentRoot(instance));
+                    // 通过 patch 对 subTree 打补丁
+                    patch(null, subTree, container, anchor);
+                    // 根节点赋值
+                    initialVNode.el = subTree.el;
+                }
+            };
+            // 创建包含 scheduler 的 effect 实例
+            var effect = (instance.effect = new ReactiveEffect(componentUpdateFn, function () { return queuePreFlushCb(update); }));
+            // 生成 update 函数
+            var update = (instance.update = function () { return effect.run(); });
+            // 本质触发 componentUpdateFn
+            update();
         };
         return {
             render: render

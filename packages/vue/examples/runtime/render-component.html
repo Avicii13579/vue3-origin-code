@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="../../dist/vue.js"></script>
+    <title>render component 挂载</title>
+  </head>
+  <body>
+    <div id="app">
+      <h4>无状态基础组件的挂载逻辑</h4>
+      <ul>
+        <li>组件的挂载主要通过 mountComponent 函数</li>
+        <li>内部通过 createComponentInstance 函数生成组件实例</li>
+        <li>通过 ReactiveEffect 函数生成 effect 对象，并支持微任务队列</li>
+        <li>在 effect.run 执行时，实现组件挂载</li>
+        <li>组件挂载的本质：</li>
+        <ul>
+          <li>拿到 render 函数返回值</li>
+          <li>通过 patch 进行挂载</li>
+        </ul>
+      </ul>
+    </div>
+    <script>
+      const { render, h, Text } = Vue
+      // 组件必须是个对象，且必须有 render 函数
+      const component = {
+        render() {
+          return h('div', 'hello')
+        }
+      }
+      const vnode = h(component)
+      render(vnode, document.getElementById('app'))
+    </script>
+  </body>
+</html>

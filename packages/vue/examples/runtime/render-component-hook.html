@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="../../dist/vue.js"></script>
+    <title>render component 的 hook</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const { render, h, Text } = Vue
+      // 组件必须是个对象，且必须有 render 函数
+      const component = {
+        data() {
+          return {
+            msg: 'hello'
+          }
+        },
+        render() {
+          return h('div', this.msg)
+        },
+        beforeCreate() {
+          alert('')
+        }
+      }
+
+      const vnode = h(component)
+      render(vnode, document.getElementById('app'))
+    </script>
+  </body>
+</html>

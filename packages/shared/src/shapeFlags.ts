@@ -1,4 +1,4 @@
-// 注意：此处采用 位运算 可以提高效率
+// 注意：此处采用 位运算 可以提高效率      << 为左移位运算，每移动一位相当于 *2
 export const enum ShapeFlags {
   // type = element
   ELEMENT = 1,
@@ -9,7 +9,7 @@ export const enum ShapeFlags {
   // children = Text
   TEXT_CHILDREN = 1 << 3,
   // children =  Array
-  ARRAY_CHILDREN = 1 << 4,
+  ARRAY_CHILDREN = 1 << 4, // 1 左移 4 为
   // children = slot
   SLOTS_CHILDREN = 1 << 5,
   // TELEPORT = 1 << 6,
