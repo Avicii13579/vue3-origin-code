@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script src="../../dist/vue.js"></script>
-    <title>render component 的 hook</title>
+    <title>render component 生命周期钩子内访问响应式数据</title>
   </head>
   <body>
     <div id="app"></div>
@@ -20,21 +20,13 @@
         render() {
           return h('div', this.msg)
         },
-        // 组件初始化后
-        beforeCreate() {
-          alert('beforeCreate')
-        },
         // 组件创建后
         created() {
-          alert('created')
-        },
-        // 组件挂载前
-        beforeMount() {
-          alert('beforeMount')
+          console.log('created', this.msg)
         },
         // 组件挂载后
         mounted() {
-          alert('mounted')
+          console.log('mounted', this.msg)
         }
       }
 

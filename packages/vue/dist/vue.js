@@ -644,12 +644,11 @@ var Vue = (function (exports) {
      */
     function normalizeChildren(vnode, children) {
         var type = 0;
-        vnode.shapeFlag;
         if (children == null) {
             children = null;
         }
         else if (isArray(children)) {
-            type = 16 /* ShapeFlags.ARRAY_CHILDREN */;
+            type = 16 /* ShapeFlags.ARRAY_CHILDREN */; // 数组子节点位运算后为 16
         }
         else if (typeof children === 'object') ;
         else if (isFunction(children)) ;
@@ -659,6 +658,14 @@ var Vue = (function (exports) {
         }
         vnode.children = children;
         vnode.shapeFlag |= type;
+        /**
+         * Element 1 按位或 子节点为 Array 16  = 17 下面这个 vnode 的 shapeFlag 为 17
+         * const vnode = h('div', { class: 'test' }, [
+            h('p', 'p1'),
+            h('p', 'p2'),
+            h('p', 'p3')
+          ])
+         */
     }
 
     function h(type, propsOrChildren, children) {
@@ -669,7 +676,7 @@ var Vue = (function (exports) {
             // 第二个参数是对象且不是数组 有两种可能性：1、vnode 2、普通的 props
             if (isObject(propsOrChildren) && !isArray(propsOrChildren)) {
                 // single vnode without props
-                // 若为 vnode
+                // 若为 vnode 默认让其当作子节点
                 if (isVNode(propsOrChildren)) {
                     return createVNode(type, null, [propsOrChildren]);
                 }
@@ -684,10 +691,11 @@ var Vue = (function (exports) {
         }
         else {
             if (l > 3) {
-                // 大于三个后续参数都作为 children
+                // 大于三个后续参数都作为 children 用 call 修改Array 的 this 指向， 获取第三个参数及以后的参数生产新的数组作为 children 的值
                 children = Array.prototype.slice.call(arguments, 2);
             }
             else if (l === 3 && isVNode(children)) {
+                // 统一 children 的类型 均为数组处理
                 children = [children];
             }
             return createVNode(type, propsOrChildren, children);
@@ -899,6 +907,28 @@ var Vue = (function (exports) {
         return result;
     }
 
+    // 将 Hook 绑定到指定实例上
+    function injectHook(type, hook, target) {
+        if (target) {
+            // 注意：此处的 this 指向的是proxy 代理对象
+            // 所以 mock 实例中  created() { alert('created', this.msg) }中的 this能拿到 msg 的内容
+            target[type] = hook;
+            return hook;
+        }
+    }
+    // 创建 Hook，将指定 lifecycle 通过 injectHook 绑定到 target 上
+    // 柯里化工厂函数 内有闭包
+    var createHook = function (lifecycle) {
+        return function (hook, target) { return injectHook(lifecycle, hook, target); };
+    };
+    /**
+     * onBeforeMount = (hook, target) => injectHook(LifecycleHooks.BEFOREMOUNT, hook?.bind(instance.data), instance)
+     * instance.data 是代理对象
+     * instance[bm] = hook
+     */
+    var onBeforeMount = createHook("bm" /* LifecycleHooks.BEFOREMOUNT */);
+    var onMounted = createHook("m" /* LifecycleHooks.MOUNTED */);
+
     var uid = 0;
     // 创建组件实例
     function createComponentInstance(vnode) {
@@ -910,7 +940,13 @@ var Vue = (function (exports) {
             subTree: null,
             effect: null,
             update: null,
-            render: null // 组件内部的 render 函数
+            render: null,
+            // 增加生命周期函数
+            isMounted: false,
+            bc: null,
+            c: null,
+            bm: null,
+            m: null // mounted
         };
         return instance;
     }
@@ -931,7 +967,7 @@ var Vue = (function (exports) {
         applyOptions(instance);
     }
     function applyOptions(instance) {
-        var dataOptions = instance.type.data;
+        var _a = instance.type, dataOptions = _a.data, beforeCreate = _a.beforeCreate, created = _a.created, beforeMount = _a.beforeMount, mounted = _a.mounted;
         // dataOptions 是组件里的 data 函数
         if (dataOptions) {
             // 获取data
@@ -941,6 +977,24 @@ var Vue = (function (exports) {
                 instance.data = reactive(data);
             }
         }
+        // 生命周期钩子
+        if (beforeCreate) {
+            callHook(beforeCreate, instance.data);
+        }
+        if (created) {
+            callHook(created, instance.data);
+        }
+        function registerLifecycleHook(register, hook) {
+            // 柯里化工厂函数 目的是实现将生命周期挂载到 instance 实例上 
+            // 目的：instace[bm] = hook
+            register(hook === null || hook === void 0 ? void 0 : hook.bind(instance.data), instance);
+        }
+        registerLifecycleHook(onBeforeMount, beforeMount);
+        registerLifecycleHook(onMounted, mounted);
+    }
+    function callHook(hook, proxy) {
+        // 指定 this 并调用生命周期
+        hook.bind(proxy)();
     }
 
     // 创建渲染器
@@ -1166,10 +1220,19 @@ var Vue = (function (exports) {
             var componentUpdateFn = function () {
                 // 挂载之前
                 if (!instance.insMounted) {
+                    var bm = instance.bm, m = instance.m;
+                    // 处理 bm
+                    if (bm) {
+                        bm();
+                    }
                     // 获取渲染内容
                     var subTree = (instance.subTree = renderComponentRoot(instance));
                     // 通过 patch 对 subTree 打补丁
                     patch(null, subTree, container, anchor);
+                    // 处理挂载
+                    if (m) {
+                        m();
+                    }
                     // 根节点赋值
                     initialVNode.el = subTree.el;
                 }

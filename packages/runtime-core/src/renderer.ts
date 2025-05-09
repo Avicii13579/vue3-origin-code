@@ -296,11 +296,22 @@ function baseCreateRenderer(options: RendererOptions):any {
         const componentUpdateFn = () => {
             // 挂载之前
             if(!instance.insMounted) {
+
+                const {bm, m} = instance
+                // 处理 bm
+                if (bm) {
+                    bm()
+                }
                 // 获取渲染内容
                 const subTree = (instance.subTree = renderComponentRoot(instance))
 
                 // 通过 patch 对 subTree 打补丁
                 patch(null, subTree, container, anchor)
+
+                // 处理挂载
+                if(m) {
+                    m()
+                }
 
                 // 根节点赋值
                 initialVNode.el = subTree.el
