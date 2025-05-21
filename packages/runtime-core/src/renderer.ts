@@ -319,6 +319,7 @@ function baseCreateRenderer(options: RendererOptions):any {
         }
 
         // 创建包含 scheduler 的 effect 实例
+        // 使用ReactiveEffect 的构造函数 将 componentUpdateFn 作为 fn 传入，() => queuePreFlushCb(update) 作为 scheduler 传入
         const effect = (instance.effect = new ReactiveEffect(
             componentUpdateFn,
             () => queuePreFlushCb(update)
