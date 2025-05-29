@@ -93,6 +93,6 @@ function applyOptions(instance:any) {
 }
 
 function callHook(hook: Function, proxy) {
-    // 指定 this 并调用生命周期
+    // 指定 this 并调用生命周期； proxy 是包含 msg 的 data
     hook.bind(proxy)()
 }

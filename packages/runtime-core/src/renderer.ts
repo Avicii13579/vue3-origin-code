@@ -315,7 +315,29 @@ function baseCreateRenderer(options: RendererOptions):any {
 
                 // 根节点赋值
                 initialVNode.el = subTree.el
-            } else {}
+
+                // 修改 mounted 状态
+                instance.isMounted = true
+            } else {
+                let {next, vnode} = instance
+                if(!next) {
+                    next = vnode
+                }
+
+                // 获取最新的 subTree
+                const nextTree = renderComponentRoot(instance)
+
+                // 保存对应的 subTree 以便进行更新
+                const prevTree = instance.subTree
+                instance.subTree = nextTree
+
+                // 通过 patch 进行更新
+                patch(prevTree, nextTree, container, anchor)
+
+                // 更新 next
+                next.el = nextTree.el
+
+            }
         }
 
         // 创建包含 scheduler 的 effect 实例

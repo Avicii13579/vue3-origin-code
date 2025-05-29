@@ -993,7 +993,7 @@ var Vue = (function (exports) {
         registerLifecycleHook(onMounted, mounted);
     }
     function callHook(hook, proxy) {
-        // 指定 this 并调用生命周期
+        // 指定 this 并调用生命周期； proxy 是包含 msg 的 data
         hook.bind(proxy)();
     }
 
@@ -1235,9 +1235,27 @@ var Vue = (function (exports) {
                     }
                     // 根节点赋值
                     initialVNode.el = subTree.el;
+                    // 修改 mounted 状态
+                    instance.isMounted = true;
+                }
+                else {
+                    var next = instance.next, vnode = instance.vnode;
+                    if (!next) {
+                        next = vnode;
+                    }
+                    // 获取最新的 subTree
+                    var nextTree = renderComponentRoot(instance);
+                    // 保存对应的 subTree 以便进行更新
+                    var prevTree = instance.subTree;
+                    instance.subTree = nextTree;
+                    // 通过 patch 进行更新
+                    patch(prevTree, nextTree, container, anchor);
+                    // 更新 next
+                    next.el = nextTree.el;
                 }
             };
             // 创建包含 scheduler 的 effect 实例
+            // 使用ReactiveEffect 的构造函数 将 componentUpdateFn 作为 fn 传入，() => queuePreFlushCb(update) 作为 scheduler 传入
             var effect = (instance.effect = new ReactiveEffect(componentUpdateFn, function () { return queuePreFlushCb(update); }));
             // 生成 update 函数
             var update = (instance.update = function () { return effect.run(); });
