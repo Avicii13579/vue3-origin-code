@@ -295,7 +295,7 @@ function baseCreateRenderer(options: RendererOptions):any {
         // 组件挂载和更新的方法
         const componentUpdateFn = () => {
             // 挂载之前
-            if(!instance.insMounted) {
+            if(!instance.isMounted) {
 
                 const {bm, m} = instance
                 // 处理 bm

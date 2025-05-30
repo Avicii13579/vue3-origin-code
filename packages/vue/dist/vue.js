@@ -1219,7 +1219,7 @@ var Vue = (function (exports) {
             // 组件挂载和更新的方法
             var componentUpdateFn = function () {
                 // 挂载之前
-                if (!instance.insMounted) {
+                if (!instance.isMounted) {
                     var bm = instance.bm, m = instance.m;
                     // 处理 bm
                     if (bm) {
