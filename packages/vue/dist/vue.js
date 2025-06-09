@@ -957,12 +957,31 @@ var Vue = (function (exports) {
         return setupResult;
     }
     function setupStatefullComponent(instance) {
+        var Component = instance.type;
+        var setup = Component.setup;
+        if (setup) {
+            var setupResult = setup();
+            handleSetupResult(instance, setupResult);
+        }
+        else {
+            // 获取组件实例
+            finishComponentSetup(instance);
+        }
+    }
+    // 判断 setupResult是否为函数 若是将 setup 函数的返回值赋值给instance.render
+    function handleSetupResult(instance, setupResult) {
+        if (isFunction(setupResult)) {
+            instance.render = setupResult;
+        }
         finishComponentSetup(instance);
     }
     // 为 instance 绑定 render 属性
     function finishComponentSetup(instance) {
         var Component = instance.type;
-        instance.render = Component.render;
+        // 判断 render 不存在时才会赋值
+        if (!instance.render) {
+            instance.render = Component.render;
+        }
         // 处理 instance 上的 data 属性
         applyOptions(instance);
     }

@@ -1,5 +1,5 @@
 import { reactive } from "@vue/reactivity"
-import { isObject } from "@vue/shared"
+import { isFunction, isObject } from "@vue/shared"
 import { onBeforeMount, onMounted } from "./apiLifecycle"
 
 let uid = 0
@@ -43,6 +43,22 @@ export function setupComponent(instance) {
 }
 
 function setupStatefullComponent(instance) {
+    const Component = instance.type
+    const {setup} = Component
+    if(setup) {
+        const setupResult = setup()
+        handleSetupResult(instance,setupResult)
+    } else {
+        // 获取组件实例
+        finishComponentSetup(instance)
+    }
+}
+
+// 判断 setupResult是否为函数 若是将 setup 函数的返回值赋值给instance.render
+export function handleSetupResult(instance, setupResult) {
+    if(isFunction(setupResult)) {
+        instance.render = setupResult
+    }
     finishComponentSetup(instance)
 }
 
@@ -50,7 +66,10 @@ function setupStatefullComponent(instance) {
 function finishComponentSetup(instance) {
     const Component = instance.type
 
-    instance.render = Component.render
+    // 判断 render 不存在时才会赋值
+    if(!instance.render) {
+        instance.render = Component.render
+    }
     // 处理 instance 上的 data 属性
     applyOptions(instance)
 }
