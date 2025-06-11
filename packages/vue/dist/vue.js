@@ -632,7 +632,8 @@ var Vue = (function (exports) {
             __v_isVNode: true,
             type: type,
             props: props,
-            shapeFlag: shapeFlag
+            shapeFlag: shapeFlag,
+            key: (props === null || props === void 0 ? void 0 : props.key) || null
         };
         normalizeChildren(vnode, children);
         return vnode;
@@ -1102,6 +1103,10 @@ var Vue = (function (exports) {
                 // 设置为文本节点
                 hostSetElementText(el, vnode.children);
             }
+            else if (shapeFlag & 16 /* ShapeFlags.ARRAY_CHILDREN */) {
+                // 设置为数组节点
+                mountChildren(vnode.children, el, anchor);
+            }
             // 处理 props
             if (props) {
                 for (var key in props) {
@@ -1205,7 +1210,13 @@ var Vue = (function (exports) {
             }
             else {
                 // 旧节点是数组节点
-                if (prevShapeFlag & 16 /* ShapeFlags.ARRAY_CHILDREN */) ;
+                if (prevShapeFlag & 16 /* ShapeFlags.ARRAY_CHILDREN */) {
+                    // 新节点是是数组节点
+                    if (shapeFlag & 16 /* ShapeFlags.ARRAY_CHILDREN */) {
+                        // TODO 进行 diff 计算
+                        patchKeyedChildren(c1, c2, container);
+                    }
+                }
                 else {
                     // 旧节点为 Text_CHILDREN
                     if (prevShapeFlag & 8 /* ShapeFlags.TEXT_CHILDREN */) {
@@ -1280,6 +1291,25 @@ var Vue = (function (exports) {
             var update = (instance.update = function () { return effect.run(); });
             // 本质触发 componentUpdateFn
             update();
+        };
+        var patchKeyedChildren = function (oldChildren, newChildren, container, parentAnchor) {
+            // 数组索引
+            var i = 0;
+            var newChildrenLength = newChildren.length;
+            var oldChildrenEndIndex = oldChildren.length - 1;
+            var newChildrenEndIndex = newChildrenLength - 1;
+            while (i <= oldChildrenEndIndex && i <= newChildrenEndIndex) {
+                var oldVNode = oldChildren[i];
+                var newVNode = normalizeVNode(newChildren[i]);
+                // 如果 oldVNode 和 newVNode 相同类型直接 patch 替换
+                if (isSameVNodeType(oldVNode, newVNode)) {
+                    patch(oldVNode, newVNode, container, null);
+                }
+                else {
+                    break;
+                }
+                i++;
+            }
         };
         return {
             render: render

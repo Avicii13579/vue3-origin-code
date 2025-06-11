@@ -126,7 +126,7 @@ function baseCreateRenderer(options: RendererOptions):any {
             hostSetElementText(el, vnode.children as string)
         } else if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
             // 设置为数组节点
-
+            mountChildren(vnode.children, el, anchor)
         }
 
         // 处理 props
@@ -252,6 +252,7 @@ function baseCreateRenderer(options: RendererOptions):any {
                 // 新节点是是数组节点
                 if(shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
                     // TODO 进行 diff 计算
+                    patchKeyedChildren(c1,c2,container,anchor)
                 } else {
                     // TODO 卸载节点
 
@@ -351,6 +352,27 @@ function baseCreateRenderer(options: RendererOptions):any {
         const update = (instance.update = () => effect.run())
         // 本质触发 componentUpdateFn
         update() 
+    }
+
+    const patchKeyedChildren = (oldChildren, newChildren, container, parentAnchor) => {
+        // 数组索引
+        let i = 0;
+        let newChildrenLength = newChildren.length
+        let oldChildrenEndIndex = oldChildren.length - 1
+        let newChildrenEndIndex = newChildrenLength -1
+
+        while(i <= oldChildrenEndIndex && i <= newChildrenEndIndex) {
+            const oldVNode = oldChildren[i]
+            const newVNode = normalizeVNode(newChildren[i])
+
+            // 如果 oldVNode 和 newVNode 相同类型直接 patch 替换
+            if(isSameVNodeType(oldVNode,newVNode)) {
+                patch(oldVNode,newVNode,container, null)
+            } else {
+                break
+            }
+            i++
+        }
     }
 
     return {
