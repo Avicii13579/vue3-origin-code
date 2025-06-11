@@ -6,6 +6,7 @@
     <script src="../../dist/vue.js"></script>
     <title>
       render vnode 相同类型 patch 处理（VNode 的 type 和 key 完全相等）
+      逆序对比（从后往前）—— 新节点数量和旧节点数量一致
     </title>
   </head>
   <body>
@@ -22,7 +23,7 @@
 
       setTimeout(() => {
         const vnode2 = h('ul', [
-          h('li', { key: 'a' }, 'a'),
+          h('li', { key: 'd' }, 'a'),
           h('li', { key: 'b' }, 'd'),
           h('li', { key: 'c' }, 'c')
         ])

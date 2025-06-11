@@ -9,9 +9,9 @@ import { queuePreFlushCb } from "./scheduler"
 
 export interface RendererOptions {
     // 为指定的 element 的 prop 打补丁
-    patchProp(el: Element, key: string, prevValue:any, nextValue:any):void
+    patchProp(el: Element, key: string, prevValue: any, nextValue: any): void
     // 为指定的 element 设置 text
-    setElementText(node: Element, text:string): void
+    setElementText(node: Element, text: string): void
     // 插入指定的 el 到 parent 中，anchor表示插入位置
     insert(el, parent: Element, anchor?): void
     // 创建指定的 element
@@ -40,7 +40,7 @@ export function createRenderer(options: RendererOptions) {
  * 生成 renderer 渲染器
  * @param options 兼容性操作配置对象
  */
-function baseCreateRenderer(options: RendererOptions):any {
+function baseCreateRenderer(options: RendererOptions): any {
     // 解构 options
     const {
         insert: hostInsert,
@@ -55,7 +55,7 @@ function baseCreateRenderer(options: RendererOptions):any {
 
     // Element 打补丁
     const processElement = (oldVNode, newVNode, container, anchor) => {
-        if(oldVNode == null) {
+        if (oldVNode == null) {
             // 挂载操作
             mountElement(newVNode, container, anchor)
         } else {
@@ -77,7 +77,7 @@ function baseCreateRenderer(options: RendererOptions):any {
              * 注意：JS 的赋值语句会返回被赋予的值
              */
             const el = (newVNode.el = oldVNode.el!)
-            if(newVNode.children !== oldVNode.children) {
+            if (newVNode.children !== oldVNode.children) {
                 // 更新操作 参数一：目标元素 参数二：Text节点内容
                 hostSetText(el, newVNode.children as string)
             }
@@ -86,19 +86,19 @@ function baseCreateRenderer(options: RendererOptions):any {
 
     // Comment 打补丁
     const processCommentNode = (oldVNode, newVNode, container, anchor) => {
-        if(oldVNode == null) {
+        if (oldVNode == null) {
             // 挂载
             newVNode.el = hostCreateComment((newVNode.children as string) || '')
             hostInsert(newVNode.el, container, anchor)
         } else {
             // 无更新
-            newVNode.el  = oldVNode.el
+            newVNode.el = oldVNode.el
         }
     }
 
     // Fragment 打补丁：都是对子节点的操作
     const processFragment = (oldVNode, newVNode, container, anchor) => {
-        if(oldVNode == null) {
+        if (oldVNode == null) {
             mountChildren(newVNode.children, container, anchor)
         } else {
             // 对比更新
@@ -108,20 +108,20 @@ function baseCreateRenderer(options: RendererOptions):any {
 
     // 组件打补丁
     const processComponent = (oldVNode, newVNode, contianer, anchor) => {
-        if(oldVNode == null) {
+        if (oldVNode == null) {
             // 挂载组件
-            mountComponent(newVNode,contianer, anchor)
+            mountComponent(newVNode, contianer, anchor)
         }
     }
 
     // 挂载元素
     const mountElement = (vnode, container, anchor) => {
-        const {type, props, shapeFlag} = vnode
+        const { type, props, shapeFlag } = vnode
 
         // 创建 element
         const el = (vnode.el = hostCreateElement(type))
 
-        if(shapeFlag & ShapeFlags.TEXT_CHILDREN) {
+        if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
             // 设置为文本节点
             hostSetElementText(el, vnode.children as string)
         } else if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
@@ -130,8 +130,8 @@ function baseCreateRenderer(options: RendererOptions):any {
         }
 
         // 处理 props
-        if(props) {
-            for(const key in props) {
+        if (props) {
+            for (const key in props) {
                 hostPatchProp(el, key, null, props[key])
             }
         }
@@ -153,29 +153,29 @@ function baseCreateRenderer(options: RendererOptions):any {
     }
 
     const patch = (oldVNode, newVNode, container, anchor = null) => {
-        if(oldVNode === newVNode) {
+        if (oldVNode === newVNode) {
             return
         }
 
         // 判断若不是相同类型的节点，则卸载旧节点
-        if(oldVNode && !isSameVNodeType(oldVNode, newVNode)) {
+        if (oldVNode && !isSameVNodeType(oldVNode, newVNode)) {
             unmount(oldVNode)
             oldVNode = null
         }
 
-        const {shapeFlag, type} = newVNode
-        switch(type) {
+        const { shapeFlag, type } = newVNode
+        switch (type) {
             case Text:
                 processText(oldVNode, newVNode, container, anchor)
                 break;
-            case Comment: 
-                processCommentNode(oldVNode, newVNode, container,anchor)
+            case Comment:
+                processCommentNode(oldVNode, newVNode, container, anchor)
                 break;
             case Fragment:
                 processFragment(oldVNode, newVNode, container, anchor)
                 break;
             default:
-                if(shapeFlag & ShapeFlags.ELEMENT) {
+                if (shapeFlag & ShapeFlags.ELEMENT) {
                     processElement(oldVNode, newVNode, container, anchor)
                 } else if (shapeFlag & ShapeFlags.COMPONENT) {
                     // 组件
@@ -186,9 +186,9 @@ function baseCreateRenderer(options: RendererOptions):any {
     }
 
     const render = (vnode, container) => {
-        if(vnode == null) {
+        if (vnode == null) {
             // 卸载
-            if(container._vnode) {
+            if (container._vnode) {
                 unmount(container._vnode)
             }
         } else {
@@ -217,75 +217,75 @@ function baseCreateRenderer(options: RendererOptions):any {
     }
 
     const mountChildren = (children, container, anchor) => {
-        if(isString(children)) {
+        if (isString(children)) {
             children = children.split('')
-        } 
-        for(let i = 0; i < children.length; i++) {
+        }
+        for (let i = 0; i < children.length; i++) {
             const child = (children[i] = normalizeVNode(children[i]))
             patch(null, child, container, anchor)
         }
-        
+
     }
-        
+
     const patchChildren = (oldVNode, newVNode, container, anchor) => {
         // 旧节点
         const c1 = oldVNode && oldVNode.children
-        const  prevShapeFlag = oldVNode ? oldVNode.shapeFlag : 0
+        const prevShapeFlag = oldVNode ? oldVNode.shapeFlag : 0
         // 新节点
         const c2 = newVNode.children
-        const {shapeFlag} = newVNode
+        const { shapeFlag } = newVNode
 
         // 新节点是文本节点
-        if(shapeFlag & ShapeFlags.TEXT_CHILDREN) {
+        if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
             // 旧节点是数组节点
-            if(prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+            if (prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
                 // TODO 卸载旧节点的子节点
             }
             // 若 c1 不等于 c2 guagua
-            if(c1 !== c2) {
+            if (c1 !== c2) {
                 // 设置为文本节点
                 hostSetElementText(container, c2 as string)
             }
         } else {
             // 旧节点是数组节点
-            if(prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+            if (prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
                 // 新节点是是数组节点
-                if(shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+                if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
                     // TODO 进行 diff 计算
-                    patchKeyedChildren(c1,c2,container,anchor)
+                    patchKeyedChildren(c1, c2, container, anchor)
                 } else {
                     // TODO 卸载节点
 
                 }
             } else {
                 // 旧节点为 Text_CHILDREN
-                if(prevShapeFlag & ShapeFlags.TEXT_CHILDREN) {
+                if (prevShapeFlag & ShapeFlags.TEXT_CHILDREN) {
                     // 删除旧节点的文本
                     hostSetElementText(container, '')
                 }
                 // 新节点为 ARRAY_CHILDREN
-                if(shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+                if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
                     // TODO 单独挂载新子节点操作
                 }
-            } 
+            }
         }
     }
 
     // 为 props 打补丁
     const patchProps = (el: Element, vnode, oldProps, newProps) => {
-        if(oldProps !== newProps) {
+        if (oldProps !== newProps) {
             // 1、遍历新的 props 赋值
-            for(const key in newProps) {
+            for (const key in newProps) {
                 const prev = oldProps[key]
                 const next = newProps[key]
-                if(prev !== next) {
+                if (prev !== next) {
                     hostPatchProp(el, key, prev, next)
                 }
             }
 
             // 遍历旧的 props 若新的里面不存在，则删除
-            for(const key in oldProps) {
-                if(!(key in newProps)) {
+            for (const key in oldProps) {
+                if (!(key in newProps)) {
                     hostPatchProp(el, key, oldProps[key], null)
                 }
             }
@@ -296,9 +296,9 @@ function baseCreateRenderer(options: RendererOptions):any {
         // 组件挂载和更新的方法
         const componentUpdateFn = () => {
             // 挂载之前
-            if(!instance.isMounted) {
+            if (!instance.isMounted) {
 
-                const {bm, m} = instance
+                const { bm, m } = instance
                 // 处理 bm
                 if (bm) {
                     bm()
@@ -310,7 +310,7 @@ function baseCreateRenderer(options: RendererOptions):any {
                 patch(null, subTree, container, anchor)
 
                 // 处理挂载
-                if(m) {
+                if (m) {
                     m()
                 }
 
@@ -320,8 +320,8 @@ function baseCreateRenderer(options: RendererOptions):any {
                 // 修改 mounted 状态
                 instance.isMounted = true
             } else {
-                let {next, vnode} = instance
-                if(!next) {
+                let { next, vnode } = instance
+                if (!next) {
                     next = vnode
                 }
 
@@ -351,7 +351,7 @@ function baseCreateRenderer(options: RendererOptions):any {
         // 生成 update 函数
         const update = (instance.update = () => effect.run())
         // 本质触发 componentUpdateFn
-        update() 
+        update()
     }
 
     const patchKeyedChildren = (oldChildren, newChildren, container, parentAnchor) => {
@@ -359,19 +359,33 @@ function baseCreateRenderer(options: RendererOptions):any {
         let i = 0;
         let newChildrenLength = newChildren.length
         let oldChildrenEndIndex = oldChildren.length - 1
-        let newChildrenEndIndex = newChildrenLength -1
+        let newChildrenEndIndex = newChildrenLength - 1
 
-        while(i <= oldChildrenEndIndex && i <= newChildrenEndIndex) {
+        // 从前向后遍历
+        while (i <= oldChildrenEndIndex && i <= newChildrenEndIndex) {
             const oldVNode = oldChildren[i]
             const newVNode = normalizeVNode(newChildren[i])
 
             // 如果 oldVNode 和 newVNode 相同类型直接 patch 替换
-            if(isSameVNodeType(oldVNode,newVNode)) {
-                patch(oldVNode,newVNode,container, null)
+            if (isSameVNodeType(oldVNode, newVNode)) {
+                patch(oldVNode, newVNode, container, null)
             } else {
                 break
             }
             i++
+        }
+
+        // 从后向前遍历
+        while (i <= oldChildrenEndIndex && i <= newChildrenEndIndex) {
+            const oldVNode = oldChildren[oldChildrenEndIndex]
+            const newVNode = normalizeVNode(newChildren[newChildrenEndIndex])
+            if (isSameVNodeType(oldVNode, newVNode)) {
+                patch(oldVNode, newVNode, container, null)
+            } else {
+                break
+            }
+            oldChildrenEndIndex--
+            newChildrenEndIndex--
         }
     }
 

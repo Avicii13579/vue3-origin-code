@@ -1298,6 +1298,7 @@ var Vue = (function (exports) {
             var newChildrenLength = newChildren.length;
             var oldChildrenEndIndex = oldChildren.length - 1;
             var newChildrenEndIndex = newChildrenLength - 1;
+            // 从前向后遍历
             while (i <= oldChildrenEndIndex && i <= newChildrenEndIndex) {
                 var oldVNode = oldChildren[i];
                 var newVNode = normalizeVNode(newChildren[i]);
@@ -1310,6 +1311,18 @@ var Vue = (function (exports) {
                 }
                 i++;
             }
+            // 从后向前遍历
+            // while (i <= oldChildrenEndIndex && i <= newChildrenEndIndex) {
+            //     const oldVNode = oldChildren[oldChildrenEndIndex]
+            //     const newVNode = normalizeVNode(newChildren[newChildrenEndIndex])
+            //     if (isSameVNodeType(oldVNode, newVNode)) {
+            //         patch(oldVNode, newVNode, container, null)
+            //     } else {
+            //         break
+            //     }
+            //     oldChildrenEndIndex--
+            //     newChildrenEndIndex--
+            // }
         };
         return {
             render: render
