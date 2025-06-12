@@ -1298,7 +1298,10 @@ var Vue = (function (exports) {
             var newChildrenLength = newChildren.length;
             var oldChildrenEndIndex = oldChildren.length - 1;
             var newChildrenEndIndex = newChildrenLength - 1;
-            // 从前向后遍历
+            // 从前向后遍历 遇到不同类型的跳出
+            // 1. sync from start
+            // (a b) c
+            // (a b) d e
             while (i <= oldChildrenEndIndex && i <= newChildrenEndIndex) {
                 var oldVNode = oldChildren[i];
                 var newVNode = normalizeVNode(newChildren[i]);
@@ -1311,18 +1314,29 @@ var Vue = (function (exports) {
                 }
                 i++;
             }
-            // 从后向前遍历
-            // while (i <= oldChildrenEndIndex && i <= newChildrenEndIndex) {
-            //     const oldVNode = oldChildren[oldChildrenEndIndex]
-            //     const newVNode = normalizeVNode(newChildren[newChildrenEndIndex])
-            //     if (isSameVNodeType(oldVNode, newVNode)) {
-            //         patch(oldVNode, newVNode, container, null)
-            //     } else {
-            //         break
-            //     }
-            //     oldChildrenEndIndex--
-            //     newChildrenEndIndex--
-            // }
+            // 从后向前遍历 遇到不同类型的跳出
+            // 2. sync from end
+            // a (b c)
+            // d e (b c)
+            while (i <= oldChildrenEndIndex && i <= newChildrenEndIndex) {
+                var oldVNode = oldChildren[oldChildrenEndIndex];
+                var newVNode = normalizeVNode(newChildren[newChildrenEndIndex]);
+                if (isSameVNodeType(oldVNode, newVNode)) {
+                    patch(oldVNode, newVNode, container, null);
+                }
+                else {
+                    break;
+                }
+                oldChildrenEndIndex--;
+                newChildrenEndIndex--;
+            }
+            // 3. common sequence + mount
+            // (a b)
+            // (a b) c 先执行 1.sync from start 在执行 3. common sequence + mount
+            // 到3 时 i = 2, e1 = 1, e2 = 2
+            // (a b)
+            // c (a b) 先执行 2.sync from start 在执行 3. common sequence + mount
+            // 到3 时 i = 0, e1 = -1, e2 = 0
         };
         return {
             render: render

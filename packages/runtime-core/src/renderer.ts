@@ -361,7 +361,10 @@ function baseCreateRenderer(options: RendererOptions): any {
         let oldChildrenEndIndex = oldChildren.length - 1
         let newChildrenEndIndex = newChildrenLength - 1
 
-        // 从前向后遍历
+        // 从前向后遍历 遇到不同类型的跳出
+        // 1. sync from start
+        // (a b) c
+        // (a b) d e
         while (i <= oldChildrenEndIndex && i <= newChildrenEndIndex) {
             const oldVNode = oldChildren[i]
             const newVNode = normalizeVNode(newChildren[i])
@@ -375,7 +378,10 @@ function baseCreateRenderer(options: RendererOptions): any {
             i++
         }
 
-        // 从后向前遍历
+        // 从后向前遍历 遇到不同类型的跳出
+        // 2. sync from end
+        // a (b c)
+        // d e (b c)
         while (i <= oldChildrenEndIndex && i <= newChildrenEndIndex) {
             const oldVNode = oldChildren[oldChildrenEndIndex]
             const newVNode = normalizeVNode(newChildren[newChildrenEndIndex])
@@ -387,6 +393,15 @@ function baseCreateRenderer(options: RendererOptions): any {
             oldChildrenEndIndex--
             newChildrenEndIndex--
         }
+
+            // 3. common sequence + mount
+            // (a b)
+            // (a b) c 先执行 1.sync from start 在执行 3. common sequence + mount
+            // 到3 时 i = 2, e1 = 1, e2 = 2
+            // (a b)
+            // c (a b) 先执行 2.sync from start 在执行 3. common sequence + mount
+            // 到3 时 i = 0, e1 = -1, e2 = 0
+            
     }
 
     return {
