@@ -1084,7 +1084,7 @@ var Vue = (function (exports) {
             }
             else {
                 // 对比更新
-                patchChildren(oldVNode, newVNode, container);
+                patchChildren(oldVNode, newVNode, container, anchor);
             }
         };
         // 组件打补丁
@@ -1180,7 +1180,7 @@ var Vue = (function (exports) {
             var oldProps = oldVNode.props || EMPTY_OBJ;
             var newProps = newVNode.props || EMPTY_OBJ;
             // 更新子节点
-            patchChildren(oldVNode, newVNode, el);
+            patchChildren(oldVNode, newVNode, el, null);
             // 更新 props
             patchProps(el, newVNode, oldProps, newProps);
         };
@@ -1214,7 +1214,7 @@ var Vue = (function (exports) {
                     // 新节点是是数组节点
                     if (shapeFlag & 16 /* ShapeFlags.ARRAY_CHILDREN */) {
                         // TODO 进行 diff 计算
-                        patchKeyedChildren(c1, c2, container);
+                        patchKeyedChildren(c1, c2, container, anchor);
                     }
                 }
                 else {
@@ -1330,13 +1330,39 @@ var Vue = (function (exports) {
                 oldChildrenEndIndex--;
                 newChildrenEndIndex--;
             }
-            // 3. common sequence + mount
+            // 3. common sequence + mount 新节点多余旧节点
             // (a b)
             // (a b) c 先执行 1.sync from start 在执行 3. common sequence + mount
             // 到3 时 i = 2, e1 = 1, e2 = 2
             // (a b)
             // c (a b) 先执行 2.sync from start 在执行 3. common sequence + mount
-            // 到3 时 i = 0, e1 = -1, e2 = 0
+            // 到 3 时 i = 0, e1 = -1, e2 = 0
+            if (i > oldChildrenEndIndex) {
+                if (i <= newChildrenEndIndex) {
+                    // 判断新节点在头部还是尾部  注意：节点的插入方式 insertBefore，插入到给定元素的前面
+                    //  头部：从尾部开始对比 nextPos < newChildrenLength，anchor 是 newChildren[nextPos].el ；
+                    //  尾部：从头部开始对比 nextPos = newChildrenLength，anchor 用父节点 parentAnchor 默认回插入到容器结尾
+                    var nextPos = newChildrenEndIndex + 1;
+                    var anchor = nextPos < newChildrenLength ? newChildren[nextPos].el : parentAnchor;
+                    while (i <= newChildrenEndIndex) {
+                        patch(null, normalizeVNode(newChildren[i]), container, anchor);
+                        i++;
+                    }
+                }
+            }
+            // 4. common sequence + unmount 旧节点过于新节点
+            // (a b) c
+            // (a b)
+            // i = 2, e1 = 2, e2 = 1
+            // a (b c)
+            // (b c)
+            // i = 0, e1 = 0, e2 = -1
+            else if (i > newChildrenEndIndex) {
+                while (i <= oldChildrenEndIndex) {
+                    unmount(oldChildren[i]); // 调用的是 nodeOps 的 remove 方法
+                    i++;
+                }
+            }
         };
         return {
             render: render

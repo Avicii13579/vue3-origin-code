@@ -394,19 +394,115 @@ function baseCreateRenderer(options: RendererOptions): any {
             newChildrenEndIndex--
         }
 
-            // 3. common sequence + mount
-            // (a b)
-            // (a b) c 先执行 1.sync from start 在执行 3. common sequence + mount
-            // 到3 时 i = 2, e1 = 1, e2 = 2
-            // (a b)
-            // c (a b) 先执行 2.sync from start 在执行 3. common sequence + mount
-            // 到3 时 i = 0, e1 = -1, e2 = 0
+        // 3. common sequence + mount 新节点多余旧节点
+        // (a b)
+        // (a b) c 先执行 1.sync from start 在执行 3. common sequence + mount
+        // 到3 时 i = 2, e1 = 1, e2 = 2
+        // (a b)
+        // c (a b) 先执行 2.sync from start 在执行 3. common sequence + mount
+        // 到 3 时 i = 0, e1 = -1, e2 = 0
+        if(i > oldChildrenEndIndex) {
+            if(i <= newChildrenEndIndex) {
+                // 判断新节点在头部还是尾部  注意：节点的插入方式 insertBefore，插入到给定元素的前面
+                //  头部：从尾部开始对比 nextPos < newChildrenLength，anchor 是 newChildren[nextPos].el ；
+                //  尾部：从头部开始对比 nextPos = newChildrenLength，anchor 用父节点 parentAnchor 默认回插入到容器结尾
+                const nextPos = newChildrenEndIndex + 1
+                const anchor = nextPos < newChildrenLength ? newChildren[nextPos].el : parentAnchor
+                while(i <= newChildrenEndIndex) {
+                    patch(null, normalizeVNode(newChildren[i]), container, anchor)
+                    i++
+                }
+            }
+        } 
+        
+        // 4. common sequence + unmount 旧节点过于新节点
+        // (a b) c
+        // (a b)
+        // i = 2, e1 = 2, e2 = 1
+        // a (b c)
+        // (b c)
+        // i = 0, e1 = 0, e2 = -1
+        else if(i > newChildrenEndIndex) { 
+            while(i <= oldChildrenEndIndex) {
+                unmount(oldChildren[i]) // 调用的是 nodeOps 的 remove 方法
+                i++
+            }
+        }
             
     }
 
     return {
         render
     }
+}
+
+// diff 对比 获取最长递增子序列
+function getSequence(arr) {
+    /* 浅拷贝解释：p 里若是引用类型，则 p[0] 和 arr[0] 指向同一个对象，若直接修改 p[0].a， arr 就会跟着修改,如下面；
+                但如果直接修改 p[0] 则 arr[0].a 不会跟着修改，它意味着直接改变了 p[0] 的指向，而不是修改 p[0].a 的值
+                const arr = [{a: 1}, {b: 2}]
+                const p = arr.slice()
+                p[0].a = 100
+                console.log(arr[0].a) // 100    
+    */
+    /* 补充：深拷贝解释：p 里若是引用类型，则 p 和 arr 指向不同的对象 修改会不影响 */
+    // p 是浅拷贝 arr 的值
+    const p = arr.slice()
+    // 最长递增子序列的下标集合，初始值为 0
+    const result = [0]
+    let i, j, u, v, c
+    // 数组长度
+    const len = arr.length
+
+    for(i = 0; i < len; i++) {
+        const arrI = arr[i]
+        if(arrI !== 0) {
+            // 获取 result 最后一个元素，result里的最大值下标
+            j = result[result.length - 1]
+            if(arr[j] < arrI) { 
+                // 存在比当前 result[result.length - 1] 大的值，则直接添加到 result 中
+                // 保存当前 arr[i] 的前驱索引 j 到 p[i]
+                p[i] = j
+                // 保存当前 arr[i] 的值到 result 中
+                result.push(i)
+                continue // 跳过后续的代码，进入下一次循环
+            } 
+
+            /* 若不满足 arr[j] < arr[i] 则说明 result 中的最后位置的值比当前 arr[i] 大，则需要更新 result 中的值 */
+            // 二分查找，找到第一个大于 arrI 的值
+            u = 0
+            v = result.length - 1
+            while(u < v) {
+                // 获取 result 的中间索引 并向下取整  位运算右移，相当于 (u + v) / 2 向下取整
+                c = (u + v) >> 1
+                if(arr[result[c]] < arrI) {
+                    // 若大于中位数 u 向右遍历
+                    u = c + 1
+                } else {
+                    // 若小于中位数 设置右侧边界 v = 中位数 c 缩小范围
+                    v = c 
+                }
+            }
+
+            if(arr[result[u]] > arrI) {
+                if(u > 0) {
+                    // 若 result[u] 大于 arrI 则更新 result[u]
+                    p[i] = result[u - 1]
+                }
+                // TODO 待补充 
+                result[u] = i
+            }
+
+        }
+    }
+    // 获取最长递增子序列的下标集合
+    u = result.length
+    v = result[u - 1]
+    while(u-- > 0) {
+        result[u] = v
+        v = p[v]
+    }
+    return result
 }
 
 
