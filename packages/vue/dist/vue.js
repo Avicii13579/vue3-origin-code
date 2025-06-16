@@ -11,8 +11,6 @@ var Vue = (function (exports) {
     var isString = function (val) { return typeof val === 'string'; };
     // 合并对象
     var extend = Object.assign;
-    // 只读空对象
-    var EMPTY_OBJ = {};
     // 判断是否为 on 开头
     var onRE = /^on[^a-z]/;
     var isOn = function (key) { return onRE.test(key); };
@@ -20,6 +18,8 @@ var Vue = (function (exports) {
     var isSameVNodeType = function (n1, n2) {
         return n1.type === n2.type && n1.key === n2.key;
     };
+    // 只读空对象
+    var EMPTY_OBJ = {};
 
     /******************************************************************************
     Copyright (c) Microsoft Corporation.
@@ -1292,6 +1292,7 @@ var Vue = (function (exports) {
             // 本质触发 componentUpdateFn
             update();
         };
+        // TODO 对比节点 进行更新操作
         var patchKeyedChildren = function (oldChildren, newChildren, container, parentAnchor) {
             // 数组索引
             var i = 0;
@@ -1363,10 +1364,174 @@ var Vue = (function (exports) {
                     i++;
                 }
             }
+            // 5. unknown sequence 乱序处理 借助最长递增子序列减少对比次数
+            // [i ... e1 + 1]: a b [c d e] f g
+            // [i ... e2 + 1]: a b [e d c h] f g
+            // i = 2, e1 = 4, e2 = 5
+            else {
+                var oldStartIndex = i;
+                var newStartIndex = i;
+                var keyToNewIndexMap = new Map();
+                // 将新节点的 key 和 index 映射到 map 中
+                for (i = newStartIndex; i <= newChildrenEndIndex; i++) {
+                    var nextChild = normalizeVNode(newChildren[i]);
+                    keyToNewIndexMap.set(nextChild.key, i);
+                }
+                // 循环旧节点 尝试 patch (打补丁) 和 unmount (卸载)
+                var j 
+                // 已打补丁的节点数量
+                = void 0;
+                // 已打补丁的节点数量
+                var patched = 0;
+                // 待打补丁的节点数量
+                var toBePatched = newChildrenEndIndex - newStartIndex + 1;
+                // 标记：是否移动
+                var moved = false;
+                var maxNewIndexSoFar = 0;
+                // 最长递增子序列的索引
+                var newIndexToOldIndexMap = new Array(toBePatched);
+                for (i = 0; i < toBePatched; i++) {
+                    // 初始化 newIndexToOldIndexMap 为 0 表示新节点未处理
+                    newIndexToOldIndexMap[i] = 0;
+                }
+                for (i = oldStartIndex; i <= oldChildrenEndIndex; i++) {
+                    var prevChild = oldChildren[i];
+                    if (patched >= toBePatched) {
+                        // 所有节点处理完成 其余卸载
+                        unmount(prevChild);
+                        continue;
+                    }
+                    // 新节点需要的位置
+                    var newIndex = void 0;
+                    if (prevChild.key != null) {
+                        // 旧节点 key 存在，根据 key 获取新节点需要的位置
+                        newIndex = keyToNewIndexMap.get(prevChild.key);
+                    }
+                    else {
+                        // 旧节点 key 不存在
+                        for (j = newStartIndex; j <= newChildrenEndIndex; j++) {
+                            if (newIndexToOldIndexMap[j - newStartIndex] === 0 && isSameVNodeType(prevChild, newChildren[j])) {
+                                // 若找到
+                                newIndex = j;
+                                break;
+                            }
+                        }
+                    }
+                    if (newIndex === undefined) {
+                        // 若未找到 则卸载
+                        unmount(prevChild);
+                        continue;
+                    }
+                    else {
+                        // 若找到 则打补丁
+                        newIndexToOldIndexMap[newIndex - newStartIndex] = i + 1;
+                        if (newIndex >= maxNewIndexSoFar) {
+                            maxNewIndexSoFar = newIndex;
+                        }
+                        else {
+                            moved = true;
+                        }
+                        patch(prevChild, newChildren[newIndex], container, null);
+                        patched++;
+                    }
+                }
+                // 获取最长递增子序列
+                var increasingNewIndexSequence = moved ? getSequence(newIndexToOldIndexMap) : EMPTY_ARR;
+                // 移动和挂载新节点
+                j = increasingNewIndexSequence.length - 1;
+                for (i = toBePatched - 1; i >= 0; i--) {
+                    var nextIndex = i + newStartIndex;
+                    var nextChild = newChildren[nextIndex];
+                    var anchor = nextIndex + 1 < newChildrenLength ? newChildren[nextIndex + 1].el : parentAnchor;
+                    if (newIndexToOldIndexMap[i] === 0) {
+                        // 挂载新节点
+                        patch(null, nextChild, container, anchor);
+                    }
+                    else if (moved) {
+                        if (j < 0 || i !== increasingNewIndexSequence[j]) {
+                            // 移动节点
+                            move(nextChild, container, anchor);
+                        }
+                        else {
+                            j--;
+                        }
+                    }
+                }
+            }
+        };
+        // 移动节点到指定位置
+        var move = function (vnode, container, anchor) {
+            var el = vnode.el;
+            hostInsert(el, container, anchor);
         };
         return {
             render: render
         };
+    }
+    // diff 对比 获取最长递增子序列
+    function getSequence(arr) {
+        /* 浅拷贝解释：p 里若是引用类型，则 p[0] 和 arr[0] 指向同一个对象，若直接修改 p[0].a， arr 就会跟着修改,如下面；
+                    但如果直接修改 p[0] 则 arr[0].a 不会跟着修改，它意味着直接改变了 p[0] 的指向，而不是修改 p[0].a 的值
+                    const arr = [{a: 1}, {b: 2}]
+                    const p = arr.slice()
+                    p[0].a = 100
+                    console.log(arr[0].a) // 100
+        */
+        /* 补充：深拷贝解释：p 里若是引用类型，则 p 和 arr 指向不同的对象 修改会不影响 */
+        // p 是浅拷贝 arr 的值
+        var p = arr.slice();
+        // 最长递增子序列的下标集合，初始值为 0
+        var result = [0];
+        var i, j, u, v, c;
+        // 数组长度
+        var len = arr.length;
+        for (i = 0; i < len; i++) {
+            var arrI = arr[i];
+            if (arrI !== 0) {
+                // 获取 result 最后一个元素，result里的最大值下标
+                j = result[result.length - 1];
+                if (arr[j] < arrI) {
+                    // 存在比当前 result[result.length - 1] 大的值，则直接添加到 result 中
+                    // 保存当前 arr[i] 的前驱索引 j 到 p[i]
+                    p[i] = j;
+                    // 保存当前 arr[i] 的值到 result 中
+                    result.push(i);
+                    continue; // 跳过后续的代码，进入下一次循环
+                }
+                /* 若不满足 arr[j] < arr[i] 则说明 result 中的最后位置的值比当前 arr[i] 大，则需要更新 result 中的值 */
+                // 二分查找，找到第一个大于 arrI 的值
+                u = 0;
+                v = result.length - 1;
+                while (u < v) {
+                    // 获取 result 的中间索引 并向下取整  位运算右移，相当于 (u + v) / 2 向下取整
+                    c = (u + v) >> 1;
+                    if (arr[result[c]] < arrI) {
+                        // 若大于中位数 u 向右遍历
+                        u = c + 1;
+                    }
+                    else {
+                        // 若小于中位数 设置右侧边界 v = 中位数 c 缩小范围
+                        v = c;
+                    }
+                }
+                if (arr[result[u]] > arrI) {
+                    if (u > 0) {
+                        // 若 result[u] 大于 arrI 则更新 result[u]
+                        p[i] = result[u - 1];
+                    }
+                    // TODO 待补充 
+                    result[u] = i;
+                }
+            }
+        }
+        // 获取最长递增子序列的下标集合
+        u = result.length;
+        v = result[u - 1];
+        while (u-- > 0) {
+            result[u] = v;
+            v = p[v];
+        }
+        return result;
     }
 
     // 合并配置对象

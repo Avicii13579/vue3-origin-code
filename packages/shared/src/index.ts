@@ -10,8 +10,7 @@ export const isFunction = (val: unknown): val is Function => typeof val === 'fun
 export const isString = (val: unknown): val is string => typeof val === 'string'
 // 合并对象
 export const extend = Object.assign
-// 只读空对象
-export const EMPTY_OBJ: {readonly [key:string]:any} = {}
+
 
 // 判断是否为 on 开头
 const onRE = /^on[^a-z]/
@@ -21,3 +20,8 @@ export const isOn = (key: string) => onRE.test(key)
 export const isSameVNodeType = (n1: VNode, n2: VNode) => {
     return n1.type === n2.type && n1.key === n2.key
 }
+
+// 只读空对象
+export const EMPTY_OBJ: {readonly [key:string]:any} = {}
+// 空数组
+export const EMPTY_ARR = []

@@ -354,6 +354,7 @@ function baseCreateRenderer(options: RendererOptions): any {
         update()
     }
 
+    // TODO 对比节点 进行更新操作
     const patchKeyedChildren = (oldChildren, newChildren, container, parentAnchor) => {
         // 数组索引
         let i = 0;
@@ -428,13 +429,114 @@ function baseCreateRenderer(options: RendererOptions): any {
                 i++
             }
         }
+
+        // 5. unknown sequence 乱序处理 借助最长递增子序列减少对比次数
+        // [i ... e1 + 1]: a b [c d e] f g
+        // [i ... e2 + 1]: a b [e d c h] f g
+        // i = 2, e1 = 4, e2 = 5
+        else {
+            const oldStartIndex = i
+            const newStartIndex = i
+            const keyToNewIndexMap = new Map()
+
+            // 将新节点的 key 和 index 映射到 map 中
+            for(i = newStartIndex; i <= newChildrenEndIndex; i++) {
+                const nextChild = normalizeVNode(newChildren[i])
+                keyToNewIndexMap.set(nextChild.key, i)
+            }
             
+            // 循环旧节点 尝试 patch (打补丁) 和 unmount (卸载)
+            let j
+            // 已打补丁的节点数量
+            let patched = 0
+            // 待打补丁的节点数量
+            const toBePatched = newChildrenEndIndex - newStartIndex + 1
+            // 标记：是否移动
+            let moved = false
+            let maxNewIndexSoFar = 0
+            // 最长递增子序列的索引
+            let newIndexToOldIndexMap = new Array(toBePatched)
+            for(i = 0; i < toBePatched; i++) {
+                // 初始化 newIndexToOldIndexMap 为 0 表示新节点未处理
+                newIndexToOldIndexMap[i] = 0
+            }
+
+            for(i = oldStartIndex; i <= oldChildrenEndIndex; i++) {
+                const prevChild = oldChildren[i]
+                if(patched >= toBePatched) {
+                    // 所有节点处理完成 其余卸载
+                    unmount(prevChild)
+                    continue
+                }
+
+                // 新节点需要的位置
+                let newIndex
+                if(prevChild.key != null) {
+                    // 旧节点 key 存在，根据 key 获取新节点需要的位置
+                    newIndex = keyToNewIndexMap.get(prevChild.key)
+                }else {
+                    // 旧节点 key 不存在
+                    for(j = newStartIndex; j <= newChildrenEndIndex; j++) {
+                        if(newIndexToOldIndexMap[j - newStartIndex] === 0 && isSameVNodeType(prevChild, newChildren[j])) {
+                            // 若找到
+                            newIndex = j
+                            break
+                        }
+                    }
+                }
+
+                if(newIndex === undefined) {
+                    // 若未找到 则卸载
+                    unmount(prevChild)
+                    continue
+                } else {
+                    // 若找到 则打补丁
+                    newIndexToOldIndexMap[newIndex - newStartIndex] = i + 1
+                    if(newIndex >= maxNewIndexSoFar) {
+                        maxNewIndexSoFar = newIndex
+                    } else {
+                        moved = true
+                    }
+                    patch(prevChild, newChildren[newIndex], container, null)
+                    patched++
+                }
+            }
+
+            // 获取最长递增子序列
+            const increasingNewIndexSequence = moved ? getSequence(newIndexToOldIndexMap) : EMPTY_ARR
+
+            // 移动和挂载新节点
+            j = increasingNewIndexSequence.length - 1
+            for(i = toBePatched - 1; i >= 0; i--) {
+                const nextIndex = i + newStartIndex
+                const nextChild = newChildren[nextIndex]
+                const anchor = nextIndex + 1 < newChildrenLength ? newChildren[nextIndex + 1].el : parentAnchor
+            
+                if(newIndexToOldIndexMap[i] === 0) {
+                    // 挂载新节点
+                    patch(null, nextChild, container, anchor)
+                } else if(moved) {
+                    if(j < 0 || i !== increasingNewIndexSequence[j]) {
+                        // 移动节点
+                        move(nextChild, container, anchor)
+                    } else {
+                        j--
+                    }
+                }
+            }
+        }
+    }
+        // 移动节点到指定位置
+    const move = (vnode, container, anchor) => {
+        const {el} =vnode
+        hostInsert(el, container, anchor)
     }
 
     return {
         render
     }
 }
+    
 
 // diff 对比 获取最长递增子序列
 function getSequence(arr) {

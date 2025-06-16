@@ -26,10 +26,10 @@
       setTimeout(() => {
         const vnode2 = h('ul', [
           h('li', { key: 'a' }, 'new-a'),
-          h('li', { key: 'c' }, 'new-b'),
-          h('li', { key: 'e' }, 'new-c'),
-          h('li', { key: 'b' }, 'new-d'),
-          h('li', { key: 'd' }, 'new-e')
+          h('li', { key: 'c' }, 'new-c'),
+          h('li', { key: 'e' }, 'new-e'),
+          h('li', { key: 'h' }, 'new-h'),
+          h('li', { key: 'd' }, 'new-d')
         ])
         render(vnode2, document.querySelector('#app'))
       }, 1000)
