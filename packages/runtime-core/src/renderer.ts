@@ -1,6 +1,6 @@
 import { ShapeFlags } from "packages/shared/src/shapeFlags"
 import { Fragment, normalizeChildren, VNode } from "./vnode"
-import { EMPTY_OBJ, isSameVNodeType, isString } from "@vue/shared"
+import { EMPTY_OBJ, EMPTY_ARR, isSameVNodeType, isString } from "@vue/shared"
 import { normalizeVNode, renderComponentRoot } from "./componentRenderUtils"
 import { createComponentInstance, setupComponent } from "./component"
 import { ReactiveEffect } from "packages/reactivity/src/effect"
@@ -437,15 +437,16 @@ function baseCreateRenderer(options: RendererOptions): any {
         else {
             const oldStartIndex = i
             const newStartIndex = i
-            const keyToNewIndexMap = new Map()
 
+            // 5.1 将新节点的 key 和 index 映射到 keyToNewIndexMap 中 通过该对象可知：新的 child 节点更新后的位置（根据 key 为新节点 child.key、index 为新节点的 index）
+            const keyToNewIndexMap = new Map()
             // 将新节点的 key 和 index 映射到 map 中
             for(i = newStartIndex; i <= newChildrenEndIndex; i++) {
                 const nextChild = normalizeVNode(newChildren[i])
                 keyToNewIndexMap.set(nextChild.key, i)
             }
             
-            // 循环旧节点 尝试 patch (打补丁) 和 unmount (卸载)
+            // 5.2 循环旧节点 尝试 patch (打补丁) 和 unmount (卸载)
             let j
             // 已打补丁的节点数量
             let patched = 0
@@ -453,8 +454,9 @@ function baseCreateRenderer(options: RendererOptions): any {
             const toBePatched = newChildrenEndIndex - newStartIndex + 1
             // 标记：是否移动
             let moved = false
+            // 保存最大的 index 值
             let maxNewIndexSoFar = 0
-            // 最长递增子序列的索引
+            // 待处理节点的索引映射，index 对应待处理节点在 新乱序节点数组 中的索引；值为 0 表示新节点未处理
             let newIndexToOldIndexMap = new Array(toBePatched)
             for(i = 0; i < toBePatched; i++) {
                 // 初始化 newIndexToOldIndexMap 为 0 表示新节点未处理
@@ -469,16 +471,16 @@ function baseCreateRenderer(options: RendererOptions): any {
                     continue
                 }
 
-                // 新节点需要的位置
+                // 找到新节点在新节点数组里的位置 newIndex
                 let newIndex
                 if(prevChild.key != null) {
                     // 旧节点 key 存在，根据 key 获取新节点需要的位置
                     newIndex = keyToNewIndexMap.get(prevChild.key)
                 }else {
-                    // 旧节点 key 不存在
+                    // 旧节点 key 不存在，遍历还未处理的新节点，找到相同类型（type相同且 key 都不存在的情况）的节点处理
                     for(j = newStartIndex; j <= newChildrenEndIndex; j++) {
                         if(newIndexToOldIndexMap[j - newStartIndex] === 0 && isSameVNodeType(prevChild, newChildren[j])) {
-                            // 若找到
+                            // TODO
                             newIndex = j
                             break
                         }
@@ -490,36 +492,48 @@ function baseCreateRenderer(options: RendererOptions): any {
                     unmount(prevChild)
                     continue
                 } else {
-                    // 若找到 则打补丁
+                    // newIndex 包括处理过的节点，所以需要减去 newStartIndex 获取到新节点在 newChildren 中的索引
+                    // 让打过补丁的节点值 > 0证明已被处理  与未被处理的0做区分
                     newIndexToOldIndexMap[newIndex - newStartIndex] = i + 1
                     if(newIndex >= maxNewIndexSoFar) {
+                        // 持续递增
                         maxNewIndexSoFar = newIndex
                     } else {
+                        // 若新节点索引小于 maxNewIndexSoFar 则说明有乱序需要移动
                         moved = true
                     }
+                    // 打补丁
                     patch(prevChild, newChildren[newIndex], container, null)
+                    // 自增处理过的数据
                     patched++
                 }
             }
 
+            // 5.3针对移动和挂载操作
             // 获取最长递增子序列
             const increasingNewIndexSequence = moved ? getSequence(newIndexToOldIndexMap) : EMPTY_ARR
 
             // 移动和挂载新节点
             j = increasingNewIndexSequence.length - 1
+            // 从后向前遍历 逆序差值或移动节点
             for(i = toBePatched - 1; i >= 0; i--) {
+                // 获取当先前新节点的下标 nextIndex
                 const nextIndex = i + newStartIndex
                 const nextChild = newChildren[nextIndex]
                 const anchor = nextIndex + 1 < newChildrenLength ? newChildren[nextIndex + 1].el : parentAnchor
             
+                // 判断新节点在 diff 过程中没有被旧节点复用，可以直接挂载
                 if(newIndexToOldIndexMap[i] === 0) {
                     // 挂载新节点
                     patch(null, nextChild, container, anchor)
                 } else if(moved) {
+                    // TODO 为什么new-b 不动 new-c 动了
+                    // i !== increasingNewIndexSequence[j] 说明当前节点不是最长递增子序列的节点里的最大值（最后一个元素）
                     if(j < 0 || i !== increasingNewIndexSequence[j]) {
                         // 移动节点
                         move(nextChild, container, anchor)
                     } else {
+                        // 若存在最长递增子序列 则 j-- 继续向前遍历
                         j--
                     }
                 }
@@ -587,11 +601,12 @@ function getSequence(arr) {
             }
 
             if(arr[result[u]] > arrI) {
+                // u === 0 说明没有前驱 则直接更新 result[u]
                 if(u > 0) {
+                    // u > 0 说明当前元素要放在递增子序列的第 u 个位置
                     // 若 result[u] 大于 arrI 则更新 result[u]
                     p[i] = result[u - 1]
                 }
-                // TODO 待补充 
                 result[u] = i
             }
 
