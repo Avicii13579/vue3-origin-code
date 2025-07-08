@@ -20,6 +20,8 @@ var Vue = (function (exports) {
     };
     // 只读空对象
     var EMPTY_OBJ = {};
+    // 空数组
+    var EMPTY_ARR = [];
 
     /******************************************************************************
     Copyright (c) Microsoft Corporation.
@@ -1371,13 +1373,14 @@ var Vue = (function (exports) {
             else {
                 var oldStartIndex = i;
                 var newStartIndex = i;
+                // 5.1 将新节点的 key 和 index 映射到 keyToNewIndexMap 中 通过该对象可知：新的 child 节点更新后的位置（根据 key 为新节点 child.key、index 为新节点的 index）
                 var keyToNewIndexMap = new Map();
                 // 将新节点的 key 和 index 映射到 map 中
                 for (i = newStartIndex; i <= newChildrenEndIndex; i++) {
                     var nextChild = normalizeVNode(newChildren[i]);
                     keyToNewIndexMap.set(nextChild.key, i);
                 }
-                // 循环旧节点 尝试 patch (打补丁) 和 unmount (卸载)
+                // 5.2 循环旧节点 尝试 patch (打补丁) 和 unmount (卸载)
                 var j 
                 // 已打补丁的节点数量
                 = void 0;
@@ -1387,8 +1390,9 @@ var Vue = (function (exports) {
                 var toBePatched = newChildrenEndIndex - newStartIndex + 1;
                 // 标记：是否移动
                 var moved = false;
+                // 保存最大的 index 值
                 var maxNewIndexSoFar = 0;
-                // 最长递增子序列的索引
+                // 待处理节点的索引映射，index 对应待处理节点在 新乱序节点数组 中的索引；值为 0 表示新节点未处理
                 var newIndexToOldIndexMap = new Array(toBePatched);
                 for (i = 0; i < toBePatched; i++) {
                     // 初始化 newIndexToOldIndexMap 为 0 表示新节点未处理
@@ -1401,17 +1405,17 @@ var Vue = (function (exports) {
                         unmount(prevChild);
                         continue;
                     }
-                    // 新节点需要的位置
+                    // 找到新节点在新节点数组里的位置 newIndex
                     var newIndex = void 0;
                     if (prevChild.key != null) {
                         // 旧节点 key 存在，根据 key 获取新节点需要的位置
                         newIndex = keyToNewIndexMap.get(prevChild.key);
                     }
                     else {
-                        // 旧节点 key 不存在
+                        // 旧节点 key 不存在，遍历还未处理的新节点，找到相同类型（type相同且 key 都不存在的情况）的节点处理
                         for (j = newStartIndex; j <= newChildrenEndIndex; j++) {
                             if (newIndexToOldIndexMap[j - newStartIndex] === 0 && isSameVNodeType(prevChild, newChildren[j])) {
-                                // 若找到
+                                // TODO
                                 newIndex = j;
                                 break;
                             }
@@ -1423,36 +1427,48 @@ var Vue = (function (exports) {
                         continue;
                     }
                     else {
-                        // 若找到 则打补丁
+                        // newIndex 包括处理过的节点，所以需要减去 newStartIndex 获取到新节点在 newChildren 中的索引
+                        // 让打过补丁的节点值 > 0证明已被处理  与未被处理的0做区分
                         newIndexToOldIndexMap[newIndex - newStartIndex] = i + 1;
                         if (newIndex >= maxNewIndexSoFar) {
+                            // 持续递增
                             maxNewIndexSoFar = newIndex;
                         }
                         else {
+                            // 若新节点索引小于 maxNewIndexSoFar 则说明有乱序需要移动
                             moved = true;
                         }
+                        // 打补丁
                         patch(prevChild, newChildren[newIndex], container, null);
+                        // 自增处理过的数据
                         patched++;
                     }
                 }
+                // 5.3针对移动和挂载操作
                 // 获取最长递增子序列
                 var increasingNewIndexSequence = moved ? getSequence(newIndexToOldIndexMap) : EMPTY_ARR;
                 // 移动和挂载新节点
                 j = increasingNewIndexSequence.length - 1;
+                // 从后向前遍历 逆序差值或移动节点
                 for (i = toBePatched - 1; i >= 0; i--) {
+                    // 获取当先前新节点的下标 nextIndex
                     var nextIndex = i + newStartIndex;
                     var nextChild = newChildren[nextIndex];
                     var anchor = nextIndex + 1 < newChildrenLength ? newChildren[nextIndex + 1].el : parentAnchor;
+                    // 判断新节点在 diff 过程中没有被旧节点复用，可以直接挂载
                     if (newIndexToOldIndexMap[i] === 0) {
                         // 挂载新节点
                         patch(null, nextChild, container, anchor);
                     }
                     else if (moved) {
+                        // TODO 为什么new-b 不动 new-c 动了
+                        // i !== increasingNewIndexSequence[j] 说明当前节点不是最长递增子序列的节点里的最大值（最后一个元素）
                         if (j < 0 || i !== increasingNewIndexSequence[j]) {
                             // 移动节点
                             move(nextChild, container, anchor);
                         }
                         else {
+                            // 若存在最长递增子序列 则 j-- 继续向前遍历
                             j--;
                         }
                     }
@@ -1515,11 +1531,12 @@ var Vue = (function (exports) {
                     }
                 }
                 if (arr[result[u]] > arrI) {
+                    // u === 0 说明没有前驱 则直接更新 result[u]
                     if (u > 0) {
+                        // u > 0 说明当前元素要放在递增子序列的第 u 个位置
                         // 若 result[u] 大于 arrI 则更新 result[u]
                         p[i] = result[u - 1];
                     }
-                    // TODO 待补充 
                     result[u] = i;
                 }
             }
@@ -1550,9 +1567,205 @@ var Vue = (function (exports) {
         (_a = ensureRenderer()).render.apply(_a, __spreadArray([], __read(args), false));
     };
 
+    /**
+     * 创建根节点
+     * @param children 子节点
+     * @returns 根节点
+     */
+    function createRoot(children) {
+        return {
+            type: 0 /* NodeTypes.ROOT */,
+            children: children,
+            // 位置信息，不影响渲染
+            loc: {}
+        };
+    }
+
+    /**
+     * 基础的 parse 方法，生成 AST
+     */
+    function baseParse(content) {
+        // 创建 parser 对象，为解析器的上下文（template 模板）
+        var context = createParserContext(content);
+        var children = parseChildren(context, []);
+        console.log(context, children);
+        return createRoot(children);
+    }
+    function createParserContext(content) {
+        return {
+            source: content
+        };
+    }
+    /**
+     * 处理子节点
+     */
+    function parseChildren(context, ancestors) {
+        console.log(context, ancestors);
+        // 存放所有 node 节点的数组
+        var nodes = [];
+        // 循环解析所有 node 节点
+        while (!isEnd(context, ancestors)) {
+            var s = context.source;
+            var node = void 0;
+            if (s.startsWith('{{')) ;
+            else if (s.startsWith('<')) {
+                // 解析开始标签
+                if (/[a-z]/i.test(s[1])) {
+                    // 解析开始标签
+                    node = parseElement(context, ancestors);
+                }
+            }
+            // 若以上两个 if 没进入，则我们可以认为它是文本节点
+            if (!node) {
+                node = parseText(context);
+            }
+            pushNode(nodes, node);
+        }
+        return nodes;
+    }
+    /**
+     * 判断 source 是否以 searchString 开头
+     * @param source 源字符串
+     * @param searchString 搜索字符串
+     * @returns 是否以 searchString 开头
+     */
+    function startsWith(source, searchString) {
+        return source.startsWith(searchString);
+    }
+    /**
+     * 判断是否结束
+     */
+    function isEnd(context, ancestors) {
+        var s = context.source;
+        if (startsWith(s, '</')) {
+            for (var i = ancestors.length - 1; i >= 0; i--) {
+                var tag = ancestors[i].tag;
+                if (startsWithEndTagOpen(s, tag)) {
+                    return true;
+                }
+            }
+        }
+        return !s;
+    }
+    /**
+     * 判断 source 是否以 </tag 开头
+     */
+    function startsWithEndTagOpen(source, tag) {
+        return (startsWith(source, '</') &&
+            source.slice(2, 2 + tag.length).toLowerCase() === tag.toLowerCase() &&
+            /[\t\r\n\f />]/.test(source[2 + tag.length] || '>'));
+    }
+    /**
+     * 将 node 节点推入 nodes 数组
+     */
+    function pushNode(nodes, node) {
+        nodes.push(node);
+    }
+    /**
+     * 解析元素
+     * @param context 上下文
+     * @param ancestors 栈
+     * @returns 元素
+     */
+    function parseElement(context, ancestors) {
+        // 先处理标签
+        var element = parseTag(context);
+        // 处理子节点
+        ancestors.push(element);
+        // 触发 parseChildren 方法，解析子节点
+        var children = parseChildren(context, ancestors);
+        ancestors.pop();
+        // 将子节点赋值给元素
+        element.children = children;
+        // 处理结束标签
+        if (startsWithEndTagOpen(context.source, element.tag)) {
+            parseTag(context);
+        }
+        return element;
+    }
+    // 解析标签
+    function parseTag(context, type) {
+        // 解析开始标签
+        var match = /^<\/?([a-z][^\t\r\n\f />]*)/i.exec(context.source);
+        // 获取标签名
+        var tag = match[1];
+        // 对模版进行解析处理
+        advanceBy(context, match[0].length);
+        // 处理结束标签部分
+        // 判断是否为自闭和标签
+        var isSelfClosing = startsWith(context.source, '/>');
+        advanceBy(context, isSelfClosing ? 2 : 1);
+        // 标签类型
+        var tagType = 0 /* ElementTypes.ELEMENT */;
+        return {
+            type: 1 /* NodeTypes.ELEMENT */,
+            tag: tag,
+            tagType: tagType,
+            props: [],
+            children: []
+        };
+    }
+    /**
+     * 截取 source 字符串, 多次调用，逐步处理 template 里的 token
+     * @param context 上下文
+     * @param numberOfCharacters 截取的长度
+     */
+    function advanceBy(context, numberOfCharacters) {
+        var source = context.source;
+        // 截取 source 字符串
+        context.source = source.slice(numberOfCharacters);
+    }
+    /**
+     * 解析文本
+     * @param context 上下文
+     * @returns 文本
+     */
+    function parseText(context) {
+        // 定义普通文本的结束标记
+        var endTokens = ['<', '{{'];
+        var endIndex = context.source.length;
+        // 精准计算 endIndex，从 context.source 中找到 < 或 {{ 的下标索引，取最小值为 endIndex
+        for (var i = 0; i < endTokens.length; i++) {
+            var index = context.source.indexOf(endTokens[i]);
+            if (index !== -1 && endIndex > index) {
+                endIndex = index;
+            }
+        }
+        // 获取处理的文本内容
+        var content = parseTextData(context, endIndex);
+        return {
+            type: 2 /* NodeTypes.TEXT */,
+            content: content
+        };
+    }
+    /**
+     * 从指定位置截取文本数据
+     * @param context 上下文
+     * @param length 截取的长度
+     * @returns 截取的文本内容
+     */
+    function parseTextData(context, length) {
+        // 获取指定文本数据
+        var rawText = context.source.slice(0, length);
+        // 截取后，更新 context.source
+        advanceBy(context, length);
+        return rawText;
+    }
+
+    function baseCompile(template, options) {
+        var ast = baseParse(template);
+        console.log(JSON.stringify(ast));
+        return {};
+    }
+
+    function compile(template, options) {
+        return baseCompile(template);
+    }
+
     exports.Comment = Comment$1;
     exports.Fragment = Fragment;
     exports.Text = Text$1;
+    exports.compile = compile;
     exports.computed = computed;
     exports.effect = effect;
     exports.h = h;
