@@ -1754,12 +1754,18 @@ var Vue = (function (exports) {
 
     function baseCompile(template, options) {
         var ast = baseParse(template);
+        transform(ast, expend(options, {
+            nodeTransforms: [
+                transformElement,
+                transformText
+            ]
+        }));
         console.log(JSON.stringify(ast));
         return {};
     }
 
     function compile(template, options) {
-        return baseCompile(template);
+        return baseCompile(template, options);
     }
 
     exports.Comment = Comment$1;
