@@ -8,9 +8,20 @@
   <body>
     <div id="app"></div>
     <script>
-      const { compile } = Vue
+      const { compile, h, render } = Vue
       const template = '<div>hello</div>'
-      const renderFn = compile(template)
+
+      const { code } = compile(template)
+      console.log(code)
+
+      const renderFn = new Function(code)()
+
+      const component = {
+        render: renderFn
+      }
+
+      const vnode = h(component)
+      render(vnode, document.getElementById('app'))
     </script>
   </body>
 </html>

@@ -1574,7 +1574,7 @@ var Vue = (function (exports) {
      * const {xx} = Vue
      * 即：从 Vue 中可以被导出的方法，我们这里统一用 creaVNode
      */
-    (_a = {},
+    var helperNameMap = (_a = {},
         // 在 renderer 中通过 export { creatVNode as createElementVNode } 导出
         _a[CREATE_ELEMENT_VNODE] = 'createElementVNode',
         _a[CREATE_VNODE] = 'createVNode',
@@ -1911,6 +1911,17 @@ var Vue = (function (exports) {
     function isText(node) {
         return node.type === 2 /* NodeTypes.TEXT */ || node.type === 5 /* NodeTypes.INTERPOLATION */;
     }
+    /**
+     * 获取 VNode 生成函数
+     * @param ssr 是否是 SSR
+     * @param isComponent 是否是组件
+     * @returns
+     */
+    function getVNodeHelper(ssr, isComponent) {
+        // 类型一致：如果 helpers 用的是 Symbol，查找时也要用 Symbol，不能用字符串。
+        // 比如：helper(CREATE_ELEMENT_VNODE)，而不是 helper("CREATE_ELEMENT_VNODE")。
+        return ssr || isComponent ? CREATE_VNODE : CREATE_ELEMENT_VNODE;
+    }
 
     /**
      * 将相邻的文本节点和表达式合并为一个表达式
@@ -1967,6 +1978,188 @@ var Vue = (function (exports) {
         }
     }
 
+    var aliasHelper = function (s) { return "".concat(helperNameMap[s], ": _").concat(helperNameMap[s]); };
+    /**
+     * 将 JavaScript 代码生成 render 函数
+     * @param ast
+     */
+    function generate(ast) {
+        // 创建代码生成上下文
+        var context = createCodegenContext(ast);
+        // 获取 code 的拼接方法
+        var push = context.push, indent = context.indent; context.deindent; var newline = context.newline;
+        // 生成函数的前置代码
+        genFunctionPreamble(context);
+        // 生成函数名称和参数
+        var functionName = 'render';
+        var args = ['_ctx', '_cache'];
+        var signature = args.join(', ');
+        // 利用函数名称和参数生成函数体
+        push("function ".concat(functionName, "(").concat(signature, ") {"));
+        // 缩进 + 换行
+        indent();
+        var hasHelpers = ast.helpers.length > 0;
+        if (hasHelpers) {
+            push("const { ".concat(ast.helpers.map(aliasHelper).join(', '), " } = _Vue"));
+            push('\n');
+            newline();
+        }
+        // 最后拼接 return 语句
+        newline();
+        push("return ");
+        // 处理 return 结果 如：return _createElementVNode("div", [], ["hello"])
+        if (ast.codegenNode) {
+            genNode(ast.codegenNode, context);
+        }
+        else {
+            push("null");
+        }
+        indent();
+        push(')');
+        console.log(context.code);
+        return {
+            ast: ast,
+            code: context.code,
+        };
+    }
+    /**
+     * 区分节点处理
+     * @param node 节点
+     * @param context 代码生成上下文
+     */
+    function genNode(node, context) {
+        switch (node.type) {
+            case 2 /* NodeTypes.TEXT */:
+                genText(node, context);
+                break;
+            case 13 /* NodeTypes.VNODE_CALL */:
+                genVNodeCall(node, context);
+                break;
+        }
+    }
+    /**
+     * 处理文本节点
+     * @param node 文本节点
+     * @param context 代码生成上下文
+     */
+    function genText(node, context) {
+        context.push(JSON.stringify(node.content), node);
+    }
+    /**
+     * 处理 VNode_CALL 节点
+     * @param node VNode_CALL 节点
+     * @param context 代码生成上下文
+     */
+    function genVNodeCall(node, context) {
+        var push = context.push, helper = context.helper;
+        var tag = node.tag, props = node.props, children = node.children, patchFlag = node.patchFlag, dynamicProps = node.dynamicProps, isComponent = node.isComponent;
+        // 返回 vnode 生成函数
+        var callHelper = getVNodeHelper(context.inSSR, isComponent);
+        // console.log(helper(CREATE_ELEMENT_VNODE));
+        push(helper(callHelper) + '(', node);
+        // 获取函数参数
+        var args = genNullableArgs([tag, props, children, patchFlag, dynamicProps]);
+        // 参数填充
+        genNodeList(args, context);
+        push(')');
+    }
+    /**
+     * 处理 createXXXVNode 函数参数
+     * @param args 参数
+     * @returns 可空参数
+     */
+    function genNullableArgs(args) {
+        var i = args.length;
+        while (i--) {
+            if (args[i] !== null) {
+                break;
+            }
+        }
+        return args.slice(0, i + 1).map(function (a) { return a || 'null'; });
+    }
+    /**
+     * 创建代码生成上下文
+     * @param ast 抽象语法树
+     */
+    function createCodegenContext(ast) {
+        var context = {
+            // render 函数代码字符串
+            code: '',
+            // 运行时全局变量名
+            runtimeGlobalName: 'Vue',
+            // 模版源
+            source: ast.loc.source,
+            // 缩进级别
+            indentLevel: 0,
+            // 需要触发的方法，关联 JavaScript AST 的属性 helpers
+            helper: function (key) {
+                return "_".concat(helperNameMap[key]);
+            },
+            // 插入代码
+            push: function (code) {
+                context.code += code;
+            },
+            // 换行
+            newline: function () {
+                newline(context.indentLevel);
+            },
+            // 缩进 + 换行
+            indent: function () {
+                newline(++context.indentLevel);
+            },
+            // 反缩进 + 换行
+            deindent: function () {
+                newline(--context.indentLevel);
+            },
+        };
+        function newline(n) {
+            context.code += '\n' + ' '.repeat(n);
+        }
+        return context;
+    }
+    /**
+     * 生成函数前置代码
+     * @param context
+     */
+    function genFunctionPreamble(context) {
+        var push = context.push, newline = context.newline, runtimeGlobalName = context.runtimeGlobalName;
+        var VueBinding = runtimeGlobalName;
+        push("const _Vue = ".concat(VueBinding, "\n"));
+        newline();
+        push("return");
+    }
+    /**
+     * 处理参数填充
+     * @param nodes 节点列表
+     * @param context 代码生成上下文
+     */
+    function genNodeList(nodes, context) {
+        var push = context.push; context.newline;
+        for (var i = 0; i < nodes.length; i++) {
+            var node = nodes[i];
+            // 字符串直接拼接
+            if (isString(node)) {
+                push(node);
+            }
+            else if (isArray(node)) {
+                // 数组需要 push "[" 和 "]"
+                genNodeListAsArray(node, context);
+            }
+            else {
+                // 对象需要区分 node 节点类型，递归处理
+                genNode(node, context);
+            }
+            if (i < nodes.length - 1) {
+                push(', ');
+            }
+        }
+    }
+    function genNodeListAsArray(nodes, context) {
+        context.push('[');
+        genNodeList(nodes, context);
+        context.push(']');
+    }
+
     function baseCompile(template, options) {
         if (options === void 0) { options = {}; }
         var ast = baseParse(template);
@@ -1977,7 +2170,7 @@ var Vue = (function (exports) {
             ]
         }));
         console.log(JSON.stringify(ast));
-        return {};
+        return generate(ast);
     }
 
     function compile(template, options) {
@@ -1989,6 +2182,7 @@ var Vue = (function (exports) {
     exports.Text = Text$1;
     exports.compile = compile;
     exports.computed = computed;
+    exports.createElementVNode = createVNode;
     exports.effect = effect;
     exports.h = h;
     exports.queuePreFlushCb = queuePreFlushCb;

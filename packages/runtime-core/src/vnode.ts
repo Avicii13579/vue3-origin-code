@@ -91,3 +91,5 @@ export function normalizeChildren(vnode: VNode, children: unknown) {
       ])
      */
 }
+
+export {createVNode as createElementVNode}
