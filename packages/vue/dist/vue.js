@@ -1567,6 +1567,19 @@ var Vue = (function (exports) {
         (_a = ensureRenderer()).render.apply(_a, __spreadArray([], __read(args), false));
     };
 
+    var _a;
+    var CREATE_ELEMENT_VNODE = Symbol('createElementVNode');
+    var CREATE_VNODE = Symbol('createVNode');
+    /**
+     * const {xx} = Vue
+     * 即：从 Vue 中可以被导出的方法，我们这里统一用 creaVNode
+     */
+    (_a = {},
+        // 在 renderer 中通过 export { creatVNode as createElementVNode } 导出
+        _a[CREATE_ELEMENT_VNODE] = 'createElementVNode',
+        _a[CREATE_VNODE] = 'createVNode',
+        _a);
+
     /**
      * 创建根节点
      * @param children 子节点
@@ -1578,6 +1591,24 @@ var Vue = (function (exports) {
             children: children,
             // 位置信息，不影响渲染
             loc: {}
+        };
+    }
+    function createVNodeCall(context, tag, props, children) {
+        if (context) {
+            context.helper(CREATE_ELEMENT_VNODE);
+        }
+        return {
+            type: 13 /* NodeTypes.VNODE_CALL */,
+            tag: tag,
+            props: props,
+            children: children
+        };
+    }
+    function createCompoundExpression(children, loc) {
+        return {
+            type: 8 /* NodeTypes.COMPOUND_EXPRESSION */,
+            children: children,
+            loc: loc
         };
     }
 
@@ -1752,23 +1783,205 @@ var Vue = (function (exports) {
         return rawText;
     }
 
+    /**
+     * 单个元素的根节点
+     */
+    function isSingleElementRoot(root, child) {
+        var children = root.children;
+        return children.length === 1 && child.type === 1 /* NodeTypes.ELEMENT */;
+    }
+
+    function transform(root, options) {
+        // 创建 transform 上下文
+        var context = createTransformContext(root, options);
+        // 按照深度优先依次处理 node 节点转化
+        traverseNode(root, context);
+        // 根节点处理
+        createRootCodegen(root);
+        root.helpers = __spreadArray([], __read(context.helpers.keys()), false);
+        root.components = [];
+        root.directives = [];
+        root.imports = [];
+        root.exports = [];
+        root.hoists = [];
+        root.temps = [];
+        root.cached = [];
+    }
+    /**
+     * 创建 transform 上下文
+     */
+    function createTransformContext(root, _a) {
+        var _b = _a.nodeTransforms, nodeTransforms = _b === void 0 ? [] : _b;
+        var context = {
+            // options
+            root: root,
+            helpers: new Map(),
+            currentNode: root,
+            parent: null,
+            childIndex: 0,
+            // state
+            nodeTransforms: nodeTransforms,
+            // methods
+            helper: function (name) {
+                var count = context.helpers.get(name) || 0;
+                context.helpers.set(name, count + 1);
+                return name;
+            }
+        };
+        return context;
+    }
+    function createRootCodegen(root) {
+        var children = root.children;
+        // 仅支持一个根节点处理
+        if (children.length === 1) {
+            var child = children[0];
+            if (isSingleElementRoot(root, child) && child.codegenNode) {
+                var codegenNode = child.codegenNode;
+                root.codegenNode = codegenNode;
+            }
+        }
+    }
+    /**
+     * 遍历转化节点，转换过程中一定要有深度优先（即：孙 -> 子 -> 父），因为当前节点的状体往往需要根据子节点的情况确定
+     * 转化过程分为两个阶段：
+     * 1、进入阶段：存储所有节点的转化函数到 exitFns 中
+     * 2、退出阶段：执行 exitFns 中缓存的函数，一定是倒叙的，保证处理过程时深度优先
+     */
+    function traverseNode(node, context) {
+        // 通过上下文记录当前正在处理的 node 节点
+        context.currentNode = node;
+        // 获取当前所有 node 节点的 transform 函数
+        var nodeTransforms = context.nodeTransforms;
+        // 存储转化函数的数组
+        var exitFns = [];
+        // 遍历 nodeTransforms 数组，将每个转化函数添加到 exitFns 中
+        for (var i_1 = 0; i_1 < nodeTransforms.length; i_1++) {
+            var onExit = nodeTransforms[i_1](node, context);
+            if (onExit) {
+                exitFns.push(onExit);
+            }
+        }
+        switch (node.type) {
+            case 0 /* NodeTypes.ROOT */:
+                traverseChildren(node, context);
+                break;
+        }
+        // 退出阶段
+        context.currentNode = node;
+        var i = exitFns.length;
+        while (i--) {
+            exitFns[i]();
+        }
+    }
+    /**
+     * 循环处理子节点
+     * @param node
+     * @param context
+     */
+    function traverseChildren(parent, context) {
+        var children = parent.children;
+        if (children) {
+            for (var i = 0; i < children.length; i++) {
+                var child = children[i];
+                context.parent = parent;
+                context.childIndex = i;
+                traverseNode(child, context);
+            }
+        }
+    }
+
+    /**
+     * 元素转换
+     */
+    function transformElement(node, context) {
+        return function postTransformElement() {
+            node = context.currentNode;
+            // 只处理元素节点
+            if (node.type !== 1 /* NodeTypes.ELEMENT */) {
+                return;
+            }
+            var tag = node.tag;
+            var vnodeTag = "\"".concat(tag, "\"");
+            var vnodeProps = [];
+            var vnodeChildren = node.children;
+            node.codegenNode = createVNodeCall(context, vnodeTag, vnodeProps, vnodeChildren);
+        };
+    }
+
+    function isText(node) {
+        return node.type === 2 /* NodeTypes.TEXT */ || node.type === 5 /* NodeTypes.INTERPOLATION */;
+    }
+
+    /**
+     * 将相邻的文本节点和表达式合并为一个表达式
+     *
+     * 例如：
+     * <div>hello{{name}}</div>
+     * 上述模版包含两个节点：
+     * 1、文本节点：hello
+     * 2、INTERPOLATION 表达式节点：{{name}}
+     * 这两个节点生成 render 函数时，需要被合并：'hello' + _toDisplayString(_ctx.msg)
+     * 那么在合并时就要多出来 + 符号
+     * 例如：
+     * children: [
+     *  { TEXT 文本节点 },
+     *  " + ",
+     *  { type: NodeTypes.INTERPOLATION }
+     * ]
+     */
+    function transformText(node, context) {
+        if (node.type === 0 /* NodeTypes.ROOT */ ||
+            node.type === 1 /* NodeTypes.ELEMENT */ ||
+            node.type === 10 /* NodeTypes.IF_BRANCH */ ||
+            node.type === 11 /* NodeTypes.FOR */) {
+            return function () {
+                // 获取所有子节点
+                var children = node.children;
+                // 当前容器
+                var currentContainer;
+                // 遍历所有子节点
+                for (var i = 0; i < children.length; i++) {
+                    var child = children[i];
+                    if (isText(child)) {
+                        // j = i + 1 表示从当前节点的下一个节点开始遍历
+                        for (var j = i + 1; j < children.length; j++) {
+                            var next = children[j];
+                            if (isText(next)) {
+                                if (!currentContainer) {
+                                    currentContainer = children[i] = createCompoundExpression([child], child.loc);
+                                    // 在当前节点 child 和下一个节点 next 之间插入 + 符号
+                                    currentContainer.children.push(' + ', next);
+                                    // 删除下一个节点
+                                    children.splice(j, 1);
+                                    j--;
+                                }
+                                else {
+                                    currentContainer = undefined;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+        }
+    }
+
     function baseCompile(template, options) {
+        if (options === void 0) { options = {}; }
         var ast = baseParse(template);
-        // transform(
-        //     ast,
-        //     expend(options,{
-        //         nodeTransforms:[
-        //             transformElement,
-        //             transformText
-        //         ]
-        //     })
-        // )
+        transform(ast, extend(options, {
+            nodeTransforms: [
+                transformElement,
+                transformText
+            ]
+        }));
         console.log(JSON.stringify(ast));
         return {};
     }
 
     function compile(template, options) {
-        return baseCompile(template);
+        return baseCompile(template, options);
     }
 
     exports.Comment = Comment$1;
