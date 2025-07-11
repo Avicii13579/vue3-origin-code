@@ -2177,10 +2177,17 @@ var Vue = (function (exports) {
         return baseCompile(template, options);
     }
 
+    function compileToFunction(template, options) {
+        var code = compile(template, options).code;
+        var render = new Function(code)();
+        console.log(render);
+        return render;
+    }
+
     exports.Comment = Comment$1;
     exports.Fragment = Fragment;
     exports.Text = Text$1;
-    exports.compile = compile;
+    exports.compile = compileToFunction;
     exports.computed = computed;
     exports.createElementVNode = createVNode;
     exports.effect = effect;
