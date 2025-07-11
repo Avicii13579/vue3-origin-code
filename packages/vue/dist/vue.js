@@ -2015,7 +2015,7 @@ var Vue = (function (exports) {
             push("null");
         }
         indent();
-        push(')');
+        push('}');
         console.log(context.code);
         return {
             ast: ast,
@@ -2126,7 +2126,7 @@ var Vue = (function (exports) {
         var VueBinding = runtimeGlobalName;
         push("const _Vue = ".concat(VueBinding, "\n"));
         newline();
-        push("return");
+        push("return ");
     }
     /**
      * 处理参数填充

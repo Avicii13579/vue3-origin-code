@@ -12,6 +12,13 @@
       const template = '<div>hello</div>'
 
       const { code } = compile(template)
+      // 编译后的渲染函数 生成虚拟 DOM
+      // const _Vue = Vue
+      // return function render(_ctx, _cache) {
+      //  const { createElementVNode: _createElementVNode } = _Vue
+      //  return _createElementVNode("div", [], ["hello"], null, null)
+      // }
+
       console.log(code)
 
       const renderFn = new Function(code)()
@@ -21,6 +28,7 @@
       }
 
       const vnode = h(component)
+      // render 把虚拟 DOM（VNode）“挂载”到真实 DOM 上。
       render(vnode, document.getElementById('app'))
     </script>
   </body>

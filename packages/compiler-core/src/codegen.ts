@@ -48,7 +48,7 @@ export function generate(ast) {
     }
 
     indent()
-    push(')')
+    push('}')
 
     console.log(context.code);
     return {
@@ -177,7 +177,7 @@ function genFunctionPreamble(context) {
     push(`const _Vue = ${VueBinding}\n`)
 
     newline()
-    push(`return`)
+    push(`return `)
 }
 
 /**
