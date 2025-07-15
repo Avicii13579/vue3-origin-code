@@ -1,0 +1,29 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>compiler-ast 在 baseCompile 中查看 AST 的生成格式</title>
+    <script src="../../dist/vue.js"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      function render(_ctx) {
+        with (_ctx) {
+          console.log(msg)
+        }
+      }
+
+      const data = {
+        msg: 'hello'
+      }
+
+      // render.call(data) 报错
+
+      // 使用 call 调用 render 函数，并传入第二个参数 data 对象作为上下文
+      // 在 render 函数中，使用 with 语句将 data 对象作为作用域，可以访问到 data 对象中的 msg 属性
+      // 因此，打印结果为 "hello"
+      render.call(data, data) // 打印 hello
+    </script>
+  </body>
+</html>

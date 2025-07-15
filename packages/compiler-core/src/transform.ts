@@ -1,5 +1,6 @@
 import { NodeTypes } from "./ast"
 import { isSingleElementRoot } from "./hoistStatic"
+import { TO_DISPLAY_STRING } from "./runtimeHelpers"
 
 export function transform(root, options) {
     // 创建 transform 上下文
@@ -95,12 +96,13 @@ export function traverseNode(node, context) {
             exitFns.push(onExit)
         }
     }
-
     switch(node.type) {
+        case NodeTypes.ELEMENT:
         case NodeTypes.ROOT:
             traverseChildren(node, context)
             break
-        case NodeTypes.ELEMENT:
+        case NodeTypes.INTERPOLATION: // {{xxx}} 差值表达式
+            context.helper(TO_DISPLAY_STRING)
             break
     }
 

@@ -1,6 +1,11 @@
 var Vue = (function (exports) {
     'use strict';
 
+    // 将值转换为字符串
+    function toDisplayString(value) {
+        return String(value);
+    }
+
     var isArray = Array.isArray;
     // 判断是否为一个对象
     var isObject = function (value) { return value !== null && typeof value === 'object'; };
@@ -894,14 +899,15 @@ var Vue = (function (exports) {
     }
     // 解析 render 函数的返回值
     function renderComponentRoot(instance) {
-        var vnode = instance.vnode, render = instance.render, data = instance.data;
+        // 因为存在 with 平接插值表达式，需要保证 data 不为 undefined
+        var vnode = instance.vnode, render = instance.render, _a = instance.data, data = _a === void 0 ? {} : _a;
         var result;
         try {
             // 按位与 思路：在 Vue 的虚拟 DOM 实现中，每个 vnode 都有一个 shapeFlag 属性，它是一个位掩码，用于标识该节点的类型和特性。
             // 当使用 & 操作符时，如果结果为非零值，表示该 vnode 确实具有 STATEFUL_COMPONENT 这个特性。
             if (vnode.shapeFlag & 4 /* ShapeFlags.STATEFUL_COMPONENT */) {
-                // 修改 render 的 this，并获取返回值
-                result = normalizeVNode(render.call(data));
+                // 修改 render 的 this，并获取返回值, 传入 data 对象作为上下文；如果 render 中使用了 this，则需要改变 this 指向
+                result = normalizeVNode(render.call(data, data));
             }
         }
         catch (err) {
@@ -1570,6 +1576,7 @@ var Vue = (function (exports) {
     var _a;
     var CREATE_ELEMENT_VNODE = Symbol('createElementVNode');
     var CREATE_VNODE = Symbol('createVNode');
+    var TO_DISPLAY_STRING = Symbol('toDisplayString');
     /**
      * const {xx} = Vue
      * 即：从 Vue 中可以被导出的方法，我们这里统一用 creaVNode
@@ -1578,6 +1585,7 @@ var Vue = (function (exports) {
         // 在 renderer 中通过 export { creatVNode as createElementVNode } 导出
         _a[CREATE_ELEMENT_VNODE] = 'createElementVNode',
         _a[CREATE_VNODE] = 'createVNode',
+        _a[TO_DISPLAY_STRING] = 'toDisplayString',
         _a);
 
     /**
@@ -1638,8 +1646,11 @@ var Vue = (function (exports) {
         while (!isEnd(context, ancestors)) {
             var s = context.source;
             var node = void 0;
-            if (s.startsWith('{{')) ;
-            else if (s.startsWith('<')) {
+            if (startsWith(s, '{{')) {
+                node = parseInterpolation(context);
+                console.log('node:', node);
+            }
+            else if (startsWith(s, '<')) {
                 // 解析开始标签
                 if (/[a-z]/i.test(s[1])) {
                     // 解析开始标签
@@ -1782,6 +1793,30 @@ var Vue = (function (exports) {
         advanceBy(context, length);
         return rawText;
     }
+    /**
+     * 解析插值表达式 {{xxx}}
+     * @param context 上下文
+     * @returns 插值
+     */
+    function parseInterpolation(context) {
+        debugger;
+        // open = {{  close = }}
+        var _a = __read(['{{', '}}'], 2), open = _a[0], close = _a[1];
+        advanceBy(context, open.length);
+        // 获取差值表达式的中间值
+        var closeIndex = context.source.indexOf(close, open.length);
+        var preTrimContent = parseTextData(context, closeIndex);
+        var content = preTrimContent.trim();
+        advanceBy(context, close.length);
+        return {
+            type: 5 /* NodeTypes.INTERPOLATION */,
+            content: {
+                type: 4 /* NodeTypes.SIMPLE_EXPRESSION */,
+                isStatic: false,
+                content: content
+            }
+        };
+    }
 
     /**
      * 单个元素的根节点
@@ -1862,8 +1897,12 @@ var Vue = (function (exports) {
             }
         }
         switch (node.type) {
+            case 1 /* NodeTypes.ELEMENT */:
             case 0 /* NodeTypes.ROOT */:
                 traverseChildren(node, context);
+                break;
+            case 5 /* NodeTypes.INTERPOLATION */: // {{xxx}} 差值表达式
+                context.helper(TO_DISPLAY_STRING);
                 break;
         }
         // 退出阶段
@@ -1987,7 +2026,7 @@ var Vue = (function (exports) {
         // 创建代码生成上下文
         var context = createCodegenContext(ast);
         // 获取 code 的拼接方法
-        var push = context.push, indent = context.indent; context.deindent; var newline = context.newline;
+        var push = context.push, indent = context.indent, deindent = context.deindent, newline = context.newline;
         // 生成函数的前置代码
         genFunctionPreamble(context);
         // 生成函数名称和参数
@@ -1997,6 +2036,9 @@ var Vue = (function (exports) {
         // 利用函数名称和参数生成函数体
         push("function ".concat(functionName, "(").concat(signature, ") {"));
         // 缩进 + 换行
+        indent();
+        // 增加 with 触发
+        push('with(_ctx) {');
         indent();
         var hasHelpers = ast.helpers.length > 0;
         if (hasHelpers) {
@@ -2014,6 +2056,9 @@ var Vue = (function (exports) {
         else {
             push("null");
         }
+        // with 结尾 +反缩进 + 换行
+        deindent();
+        push('}');
         indent();
         push('}');
         console.log(context.code);
@@ -2034,6 +2079,18 @@ var Vue = (function (exports) {
                 break;
             case 13 /* NodeTypes.VNODE_CALL */:
                 genVNodeCall(node, context);
+                break;
+            // 复合表达式处理
+            case 4 /* NodeTypes.SIMPLE_EXPRESSION */:
+                genExpression(node, context);
+                break;
+            // 表示处理
+            case 5 /* NodeTypes.INTERPOLATION */:
+                genInterpolation(node, context);
+                break;
+            // {{}} 处理
+            case 8 /* NodeTypes.COMPOUND_EXPRESSION */:
+                genCompoundExpression(node, context);
                 break;
         }
     }
@@ -2159,6 +2216,27 @@ var Vue = (function (exports) {
         genNodeList(nodes, context);
         context.push(']');
     }
+    function genCompoundExpression(node, context) {
+        for (var i = 0; i < node.children.length; i++) {
+            var child = node.children[i];
+            if (isString(child)) {
+                context.push(child);
+            }
+            else {
+                genNode(child, context);
+            }
+        }
+    }
+    function genInterpolation(node, context) {
+        var push = context.push, helper = context.helper;
+        push("".concat(helper(TO_DISPLAY_STRING), "("));
+        genNode(node.content, context);
+        push(')');
+    }
+    function genExpression(node, context) {
+        var content = node.content, isStatic = node.isStatic;
+        context.push(isStatic ? JSON.stringify(content) : content, node);
+    }
 
     function baseCompile(template, options) {
         if (options === void 0) { options = {}; }
@@ -2196,6 +2274,7 @@ var Vue = (function (exports) {
     exports.reactive = reactive;
     exports.ref = ref;
     exports.render = render;
+    exports.toDisplayString = toDisplayString;
     exports.watch = watch;
 
     Object.defineProperty(exports, '__esModule', { value: true });

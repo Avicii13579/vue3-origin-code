@@ -3,3 +3,4 @@ export {queuePreFlushCb,watch,h,Fragment, Comment, Text, createElementVNode} fro
 export {render} from '@vue/runtime-dom'
 // export {compile} from '@vue/compiler-dom'
 export {compile} from '@vue/vue-compat'
+export {toDisplayString} from '@vue/shared'

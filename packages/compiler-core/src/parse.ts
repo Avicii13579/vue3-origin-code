@@ -36,9 +36,10 @@ function parseChildren(context:ParserContext, ancestors:any[]) {
     while(!isEnd(context, ancestors)) {
         const s = context.source
         let node
-        if(s.startsWith('{{')) {
-            // 解析结束标签
-        } else if(s.startsWith('<')) {
+        if(startsWith(s, '{{')) {
+            node = parseInterpolation(context)
+            console.log('node:', node)
+        } else if(startsWith(s, '<')) {
             // 解析开始标签
             if(/[a-z]/i.test(s[1])) {
                 // 解析开始标签
@@ -208,4 +209,32 @@ function parseTextData(context:ParserContext, length:number) {
     // 截取后，更新 context.source
     advanceBy(context, length)
     return rawText
+}
+
+/**
+ * 解析插值表达式 {{xxx}}
+ * @param context 上下文
+ * @returns 插值
+ */
+function parseInterpolation(context:ParserContext) {
+    debugger
+    // open = {{  close = }}
+    const [open, close] = ['{{', '}}']
+
+    advanceBy(context, open.length)
+
+    // 获取差值表达式的中间值
+    const closeIndex = context.source.indexOf(close, open.length)
+    const preTrimContent = parseTextData(context, closeIndex)
+    const content = preTrimContent.trim()
+    advanceBy(context, close.length)
+
+    return {
+        type: NodeTypes.INTERPOLATION,
+        content: {
+            type: NodeTypes.SIMPLE_EXPRESSION,
+            isStatic: false,
+            content
+        }
+    }
 }

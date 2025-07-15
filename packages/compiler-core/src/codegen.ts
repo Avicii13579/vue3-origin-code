@@ -1,6 +1,6 @@
 import { isArray, isString } from "@vue/shared"
 import { NodeTypes } from "./ast"
-import { CREATE_ELEMENT_VNODE, helperNameMap } from "./runtimeHelpers"
+import { CREATE_ELEMENT_VNODE, helperNameMap, TO_DISPLAY_STRING } from "./runtimeHelpers"
 import { getVNodeHelper } from "./utils"
 
 const aliasHelper = (s: symbol) => `${helperNameMap[s]}: _${helperNameMap[s]}`
@@ -29,6 +29,11 @@ export function generate(ast) {
     // 缩进 + 换行
     indent()
 
+    // 增加 with 触发
+    push('with(_ctx) {')
+    indent()
+
+    
     const hasHelpers = ast.helpers.length > 0
     if(hasHelpers) {
         push(`const { ${ast.helpers.map(aliasHelper).join(', ')} } = _Vue`)
@@ -46,6 +51,10 @@ export function generate(ast) {
     } else {
         push(`null`)
     }
+
+    // with 结尾 +反缩进 + 换行
+    deindent()
+    push('}')
 
     indent()
     push('}')
@@ -70,6 +79,18 @@ function genNode(node, context) {
             break
         case NodeTypes.VNODE_CALL:
             genVNodeCall(node, context)
+            break
+        // 复合表达式处理
+        case NodeTypes.SIMPLE_EXPRESSION:
+            genExpression(node, context)
+            break
+        // 表示处理
+        case NodeTypes.INTERPOLATION:
+            genInterpolation(node, context)
+            break
+        // {{}} 处理
+        case NodeTypes.COMPOUND_EXPRESSION:
+            genCompoundExpression(node, context)
             break
     }
 }
@@ -211,5 +232,27 @@ function genNodeListAsArray(nodes, context) {
     context.push(']')
 }
 
+function genCompoundExpression(node, context) {
+    for(let i = 0; i < node.children!.length; i++) {
+        const child = node.children![i]
+        if(isString(child)) {
+            context.push(child)
+        } else {
+            genNode(child, context)
+        }
+    }
+}
+
+function genInterpolation(node, context) {
+    const {push, helper} = context
+    push(`${helper(TO_DISPLAY_STRING)}(`)
+    genNode(node.content, context)
+    push(')')
+}
+
+function genExpression(node, context) {
+   const {content, isStatic} = node
+   context.push(isStatic ? JSON.stringify(content) : content, node)
+}
 
 

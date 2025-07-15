@@ -25,3 +25,5 @@ export const isSameVNodeType = (n1: VNode, n2: VNode) => {
 export const EMPTY_OBJ: {readonly [key:string]:any} = {}
 // 空数组
 export const EMPTY_ARR = []
+
+export * from './toDisplayString'
