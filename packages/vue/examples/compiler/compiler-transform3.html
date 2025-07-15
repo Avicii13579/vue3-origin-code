@@ -1,0 +1,25 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>compiler-transform</title>
+    <script src="../../dist/vue.js"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const { compile, h, render } = Vue
+      const template = '<div><h1>hello world</h1></div>'
+
+      const renderFn = compile(template)
+
+      const component = {
+        render: renderFn
+      }
+
+      const vnode = h(component)
+      // render 把虚拟 DOM（VNode）“挂载”到真实 DOM 上。
+      render(vnode, document.getElementById('app'))
+    </script>
+  </body>
+</html>

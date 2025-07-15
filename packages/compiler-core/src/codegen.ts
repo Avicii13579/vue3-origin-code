@@ -74,6 +74,10 @@ export function generate(ast) {
  */
 function genNode(node, context) {
     switch(node.type) {
+        case NodeTypes.ELEMENT:
+            // 处理子节点
+            genNode(node.codegenNode!, context)
+            break
         case NodeTypes.TEXT:
             genText(node, context)
             break

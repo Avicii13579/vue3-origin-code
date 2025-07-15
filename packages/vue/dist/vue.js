@@ -2074,6 +2074,10 @@ var Vue = (function (exports) {
      */
     function genNode(node, context) {
         switch (node.type) {
+            case 1 /* NodeTypes.ELEMENT */:
+                // 处理子节点
+                genNode(node.codegenNode, context);
+                break;
             case 2 /* NodeTypes.TEXT */:
                 genText(node, context);
                 break;
