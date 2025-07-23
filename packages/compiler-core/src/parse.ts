@@ -142,6 +142,10 @@ function parseTag(context:ParserContext, type:TagType) {
     // 对模版进行解析处理
     advanceBy(context, match[0].length)
 
+    // 属性与指令处理 如：v-if
+    advanceSpaces(context)
+    let props = parseAttributes(context, type)
+
     // 处理结束标签部分
 
     // 判断是否为自闭和标签
@@ -155,8 +159,8 @@ function parseTag(context:ParserContext, type:TagType) {
         type: NodeTypes.ELEMENT,
         tag,
         tagType,
-        props: [], // 属性
-        children: []
+        props, // 属性
+        // children: []
     }
 
 }
@@ -236,5 +240,147 @@ function parseInterpolation(context:ParserContext) {
             isStatic: false,
             content
         }
+    }
+}
+
+/**
+ * 处理 div v-if 之间的空格
+ * @param context 上下文
+ */
+function advanceSpaces(context:ParserContext): void {
+    const match = /^[\t\r\n\f ]+/.exec(context.source)
+    if (match) {
+      advanceBy(context, match[0].length)
+    }
+}
+
+/**
+ * 解析属性与指令
+ * @param context 上下文
+ * @param type 标签类型
+ * @returns 属性与指令
+ */
+function parseAttributes(context:ParserContext, type:TagType) {
+    // 解析后的 props 数组
+    const props:any = []
+    // 属性名数组
+    const attributeNames = new Set<string>()
+
+    // 循环解析，直到解析道标签结束 ('>' || '/>')
+    while(
+        context.source.length > 0 &&
+        !startsWith(context.source, '>') &&
+        !startsWith(context.source, '/>')
+    ) {
+        const attr = parseAttribute(context, attributeNames)
+
+        if(type === TagType.Start) {
+            // 将属性名添加到属性名数组中
+            props.push(attr)
+        }
+        advanceSpaces(context)
+    }
+    return props
+}
+
+/**
+ * 解析属性与指令
+ * @param context 上下文
+ * @param nameSet 属性名集合
+ * @returns 属性与指令
+ */
+function parseAttribute(context: ParserContext, nameSet: Set<string>) {
+    // 解析属性名
+    const match = /^[^\t\r\n\f />][^\t\r\n\f />=]*/.exec(context.source)!
+    const name = match[0] // TODO 这里有问题 match 为空时，会报错
+    // 将属性名添加到属性名集合中
+    nameSet.add(name)
+
+    // 截取属性名后的内容
+    advanceBy(context, name.length)
+
+    // 解析属性值
+    let value:any = undefined
+
+    // 解析模版 获取对应属性节点的值
+    if(/^[\t\r\n\f ]*=/.test(context.source)) {
+        advanceSpaces(context)
+        // 截取属性值
+        advanceBy(context, 1)
+        advanceSpaces(context)
+        // 解析属性值
+        value = parseAttributeValue(context)
+    }
+
+    // 针对 v- 指令的处理
+    if(/^(v-[A-Za-z0-9-]|:|\.|@|#)/.test(name)) {
+        const match =
+        /(?:^v-([a-z0-9-]+))?(?:(?::|^\.|^@|^#)(\[[^\]]+\]|[^\.]+))?(.+)?$/i.exec(
+          name
+        )!
+
+        // 获取指令名称 v-if 则获取 if
+        let dirName = match[1]
+        // 获取指令参数 v-if="xxx" 则获取 xxx
+        // let arg: any
+        // 获取指令修饰符 v-if:xxx 则获取 xxx
+        // let modifiers = match[3] ? match[3].slice(1).split('.') : []
+
+        return {
+            type: NodeTypes.DIRECTIVE,
+            name: dirName,
+            arg: undefined,
+            modifiers: undefined,
+            exp: value && {
+                type: NodeTypes.SIMPLE_EXPRESSION,
+                content: value.content,
+                isStatic: false,
+                loc: value.loc
+            },
+            loc: {
+            }
+           
+        }
+    }
+
+    return {
+        type: NodeTypes.ATTRIBUTE,
+        name,
+        value: value && {
+            type: NodeTypes.TEXT,
+            content: value.content,
+            isStatic: false,
+            loc: value.loc
+        },
+        loc: {}
+    }
+}
+
+function parseAttributeValue(context:ParserContext) {
+    let content = ''
+
+    // 判断是单引号还是双引号
+    const quote = context.source[0]
+    const isQuoted = quote === '"' || quote === "'"
+
+    if(isQuoted) {
+        // 截取属性值
+        advanceBy(context, 1)
+        // 获取结束的 index
+        const endIndex = context.source.indexOf(quote)
+
+        // 如果存在结束的 index，则截取属性值 如：v-if="xxx" 则截取 xxx
+        if(endIndex !== -1) {
+            content = parseTextData(context, endIndex)
+            // 截取属性值
+            advanceBy(context, endIndex + 1)
+        } else {
+            content = parseTextData(context, context.source.length)
+        }
+    } 
+    return {
+        content,
+        isQuoted,
+        loc: {}
     }
 }

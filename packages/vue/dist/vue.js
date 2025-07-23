@@ -1711,7 +1711,7 @@ var Vue = (function (exports) {
      */
     function parseElement(context, ancestors) {
         // 先处理标签
-        var element = parseTag(context);
+        var element = parseTag(context, 0 /* TagType.Start */);
         // 处理子节点
         ancestors.push(element);
         // 触发 parseChildren 方法，解析子节点
@@ -1721,7 +1721,7 @@ var Vue = (function (exports) {
         element.children = children;
         // 处理结束标签
         if (startsWithEndTagOpen(context.source, element.tag)) {
-            parseTag(context);
+            parseTag(context, 1 /* TagType.End */);
         }
         return element;
     }
@@ -1733,6 +1733,9 @@ var Vue = (function (exports) {
         var tag = match[1];
         // 对模版进行解析处理
         advanceBy(context, match[0].length);
+        // 属性与指令处理 如：v-if
+        advanceSpaces(context);
+        var props = parseAttributes(context, type);
         // 处理结束标签部分
         // 判断是否为自闭和标签
         var isSelfClosing = startsWith(context.source, '/>');
@@ -1743,8 +1746,8 @@ var Vue = (function (exports) {
             type: 1 /* NodeTypes.ELEMENT */,
             tag: tag,
             tagType: tagType,
-            props: [],
-            children: []
+            props: props,
+            // children: []
         };
     }
     /**
@@ -1815,6 +1818,126 @@ var Vue = (function (exports) {
                 isStatic: false,
                 content: content
             }
+        };
+    }
+    /**
+     * 处理 div v-if 之间的空格
+     * @param context 上下文
+     */
+    function advanceSpaces(context) {
+        var match = /^[\t\r\n\f ]+/.exec(context.source);
+        if (match) {
+            advanceBy(context, match[0].length);
+        }
+    }
+    /**
+     * 解析属性与指令
+     * @param context 上下文
+     * @param type 标签类型
+     * @returns 属性与指令
+     */
+    function parseAttributes(context, type) {
+        // 解析后的 props 数组
+        var props = [];
+        // 属性名数组
+        var attributeNames = new Set();
+        // 循环解析，直到解析道标签结束 ('>' || '/>')
+        while (context.source.length > 0 &&
+            !startsWith(context.source, '>') &&
+            !startsWith(context.source, '/>')) {
+            var attr = parseAttribute(context, attributeNames);
+            if (type === 0 /* TagType.Start */) {
+                // 将属性名添加到属性名数组中
+                props.push(attr);
+            }
+            advanceSpaces(context);
+        }
+        return props;
+    }
+    /**
+     * 解析属性与指令
+     * @param context 上下文
+     * @param nameSet 属性名集合
+     * @returns 属性与指令
+     */
+    function parseAttribute(context, nameSet) {
+        // 解析属性名
+        var match = /^[^\t\r\n\f />][^\t\r\n\f />=]*/.exec(context.source);
+        var name = match[0]; // TODO 这里有问题 match 为空时，会报错
+        // 将属性名添加到属性名集合中
+        nameSet.add(name);
+        // 截取属性名后的内容
+        advanceBy(context, name.length);
+        // 解析属性值
+        var value = undefined;
+        // 解析模版 获取对应属性节点的值
+        if (/^[\t\r\n\f ]*=/.test(context.source)) {
+            advanceSpaces(context);
+            // 截取属性值
+            advanceBy(context, 1);
+            advanceSpaces(context);
+            // 解析属性值
+            value = parseAttributeValue(context);
+        }
+        // 针对 v- 指令的处理
+        if (/^(v-[A-Za-z0-9-]|:|\.|@|#)/.test(name)) {
+            var match_1 = /(?:^v-([a-z0-9-]+))?(?:(?::|^\.|^@|^#)(\[[^\]]+\]|[^\.]+))?(.+)?$/i.exec(name);
+            // 获取指令名称 v-if 则获取 if
+            var dirName = match_1[1];
+            // 获取指令参数 v-if="xxx" 则获取 xxx
+            // let arg: any
+            // 获取指令修饰符 v-if:xxx 则获取 xxx
+            // let modifiers = match[3] ? match[3].slice(1).split('.') : []
+            return {
+                type: 7 /* NodeTypes.DIRECTIVE */,
+                name: dirName,
+                arg: undefined,
+                modifiers: undefined,
+                exp: value && {
+                    type: 4 /* NodeTypes.SIMPLE_EXPRESSION */,
+                    content: value.content,
+                    isStatic: false,
+                    loc: value.loc
+                },
+                loc: {}
+            };
+        }
+        return {
+            type: 6 /* NodeTypes.ATTRIBUTE */,
+            name: name,
+            value: value && {
+                type: 2 /* NodeTypes.TEXT */,
+                content: value.content,
+                isStatic: false,
+                loc: value.loc
+            },
+            loc: {}
+        };
+    }
+    function parseAttributeValue(context) {
+        var content = '';
+        // 判断是单引号还是双引号
+        var quote = context.source[0];
+        var isQuoted = quote === '"' || quote === "'";
+        if (isQuoted) {
+            // 截取属性值
+            advanceBy(context, 1);
+            // 获取结束的 index
+            var endIndex = context.source.indexOf(quote);
+            // 如果存在结束的 index，则截取属性值 如：v-if="xxx" 则截取 xxx
+            if (endIndex !== -1) {
+                content = parseTextData(context, endIndex);
+                // 截取属性值
+                advanceBy(context, endIndex + 1);
+            }
+            else {
+                content = parseTextData(context, context.source.length);
+            }
+        }
+        return {
+            content: content,
+            isQuoted: isQuoted,
+            loc: {}
         };
     }
 
