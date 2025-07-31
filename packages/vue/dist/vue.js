@@ -1577,6 +1577,7 @@ var Vue = (function (exports) {
     var CREATE_ELEMENT_VNODE = Symbol('createElementVNode');
     var CREATE_VNODE = Symbol('createVNode');
     var TO_DISPLAY_STRING = Symbol('toDisplayString');
+    var CREATE_COMMENT = Symbol('createCommentVNode');
     /**
      * const {xx} = Vue
      * 即：从 Vue 中可以被导出的方法，我们这里统一用 creaVNode
@@ -1586,6 +1587,7 @@ var Vue = (function (exports) {
         _a[CREATE_ELEMENT_VNODE] = 'createElementVNode',
         _a[CREATE_VNODE] = 'createVNode',
         _a[TO_DISPLAY_STRING] = 'toDisplayString',
+        _a[CREATE_COMMENT] = 'createCommentVNode',
         _a);
 
     /**
@@ -1747,7 +1749,7 @@ var Vue = (function (exports) {
             tag: tag,
             tagType: tagType,
             props: props,
-            // children: []
+            children: []
         };
     }
     /**
@@ -1949,6 +1951,21 @@ var Vue = (function (exports) {
         return children.length === 1 && child.type === 1 /* NodeTypes.ELEMENT */;
     }
 
+    function isText(node) {
+        return node.type === 2 /* NodeTypes.TEXT */ || node.type === 5 /* NodeTypes.INTERPOLATION */;
+    }
+    /**
+     * 获取 VNode 生成函数
+     * @param ssr 是否是 SSR
+     * @param isComponent 是否是组件
+     * @returns
+     */
+    function getVNodeHelper(ssr, isComponent) {
+        // 类型一致：如果 helpers 用的是 Symbol，查找时也要用 Symbol，不能用字符串。
+        // 比如：helper(CREATE_ELEMENT_VNODE)，而不是 helper("CREATE_ELEMENT_VNODE")。
+        return ssr || isComponent ? CREATE_VNODE : CREATE_ELEMENT_VNODE;
+    }
+
     function transform(root, options) {
         // 创建 transform 上下文
         var context = createTransformContext(root, options);
@@ -1984,6 +2001,9 @@ var Vue = (function (exports) {
                 var count = context.helpers.get(name) || 0;
                 context.helpers.set(name, count + 1);
                 return name;
+            },
+            replaceNode: function (node) {
+                context.parent.children[context.childIndex] = context.currentNode = node;
             }
         };
         return context;
@@ -2068,21 +2088,6 @@ var Vue = (function (exports) {
             var vnodeChildren = node.children;
             node.codegenNode = createVNodeCall(context, vnodeTag, vnodeProps, vnodeChildren);
         };
-    }
-
-    function isText(node) {
-        return node.type === 2 /* NodeTypes.TEXT */ || node.type === 5 /* NodeTypes.INTERPOLATION */;
-    }
-    /**
-     * 获取 VNode 生成函数
-     * @param ssr 是否是 SSR
-     * @param isComponent 是否是组件
-     * @returns
-     */
-    function getVNodeHelper(ssr, isComponent) {
-        // 类型一致：如果 helpers 用的是 Symbol，查找时也要用 Symbol，不能用字符串。
-        // 比如：helper(CREATE_ELEMENT_VNODE)，而不是 helper("CREATE_ELEMENT_VNODE")。
-        return ssr || isComponent ? CREATE_VNODE : CREATE_ELEMENT_VNODE;
     }
 
     /**

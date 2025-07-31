@@ -1,6 +1,7 @@
 export const CREATE_ELEMENT_VNODE = Symbol('createElementVNode')
 export const CREATE_VNODE = Symbol('createVNode')
 export const TO_DISPLAY_STRING = Symbol('toDisplayString')
+export const CREATE_COMMENT = Symbol('createCommentVNode')
 
 /**
  * const {xx} = Vue
@@ -10,5 +11,6 @@ export const helperNameMap = {
     // 在 renderer 中通过 export { creatVNode as createElementVNode } 导出
     [CREATE_ELEMENT_VNODE]: 'createElementVNode',
     [CREATE_VNODE]: 'createVNode',
-    [TO_DISPLAY_STRING]: 'toDisplayString'
+    [TO_DISPLAY_STRING]: 'toDisplayString',
+    [CREATE_COMMENT]: 'createCommentVNode'
 }

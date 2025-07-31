@@ -160,7 +160,7 @@ function parseTag(context:ParserContext, type:TagType) {
         tag,
         tagType,
         props, // 属性
-        // children: []
+        children: []
     }
 
 }

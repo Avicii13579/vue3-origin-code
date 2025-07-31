@@ -1,3 +1,4 @@
+import { isString } from "@vue/shared"
 import { CREATE_ELEMENT_VNODE } from "./runtimeHelpers"
 
 export const enum NodeTypes {
@@ -77,5 +78,35 @@ export function createCompoundExpression(children, loc) {
     type: NodeTypes.COMPOUND_EXPRESSION,
     children,
     loc
+  }
+}
+
+/**
+ * 创建简单表达式节点
+ * @param content 表达式内容
+ * @param isStatic 是否静态
+ * @returns 返回一个简单表达式节点
+ */
+export function createSimpleExpression(content, isStatic) {
+  return {
+    type: NodeTypes.SIMPLE_EXPRESSION,
+    content,
+    isStatic,
+    loc: {}
+  }
+}
+
+/**
+ * 创建对象属性节点
+ * @param key 属性名
+ * @param value 属性值
+ * @returns 返回一个对象属性节点
+ */
+export const createObjectProperty = (key, value) => {
+  return {
+    type: NodeTypes.JS_PROPERTY,
+    loc: {},
+    key: isString(key) ?  createSimpleExpression(key, true) : key ,
+    value
   }
 }
