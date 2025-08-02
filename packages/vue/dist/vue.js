@@ -1621,6 +1621,67 @@ var Vue = (function (exports) {
             loc: loc
         };
     }
+    /**
+     * 创建简单表达式节点
+     * @param content 表达式内容
+     * @param isStatic 是否静态
+     * @returns 返回一个简单表达式节点
+     */
+    function createSimpleExpression(content, isStatic) {
+        return {
+            type: 4 /* NodeTypes.SIMPLE_EXPRESSION */,
+            content: content,
+            isStatic: isStatic,
+            loc: {}
+        };
+    }
+    /**
+     * 创建对象属性节点
+     * @param key 属性名
+     * @param value 属性值
+     * @returns 返回一个对象属性节点
+     */
+    var createObjectProperty = function (key, value) {
+        return {
+            type: 16 /* NodeTypes.JS_PROPERTY */,
+            loc: {},
+            key: isString(key) ? createSimpleExpression(key, true) : key,
+            value: value
+        };
+    };
+    /**
+     * 创建条件表达式
+     * @param test 条件
+     * @param consequent 条件为真时的表达式
+     * @param alternate 条件为假时的表达式
+     * @param newline 是否换行
+     * @returns 返回一个条件表达式
+     */
+    function createConditionalExpression(test, consequent, alternate, newline) {
+        if (newline === void 0) { newline = true; }
+        return {
+            type: 19 /* NodeTypes.JS_CONDITIONAL_EXPRESSION */,
+            test: test,
+            consequent: consequent,
+            alternate: alternate,
+            newline: newline,
+            loc: {}
+        };
+    }
+    /**
+     * 创建 JS 调用表达式的节点
+     * @param callee 调用表达式
+     * @param args 参数
+     * @returns 返回一个 JS 调用表达式
+     */
+    function createCallExpression(callee, args) {
+        return {
+            type: 14 /* NodeTypes.JS_CALL_EXPRESSION */,
+            loc: {},
+            callee: callee,
+            arguments: args
+        };
+    }
 
     /**
      * 基础的 parse 方法，生成 AST
@@ -1804,7 +1865,6 @@ var Vue = (function (exports) {
      * @returns 插值
      */
     function parseInterpolation(context) {
-        debugger;
         // open = {{  close = }}
         var _a = __read(['{{', '}}'], 2), open = _a[0], close = _a[1];
         advanceBy(context, open.length);
@@ -1847,7 +1907,18 @@ var Vue = (function (exports) {
         while (context.source.length > 0 &&
             !startsWith(context.source, '>') &&
             !startsWith(context.source, '/>')) {
+            if (startsWith(context.source, '/')) {
+                advanceBy(context, 1);
+                advanceSpaces(context);
+                continue;
+            }
+            // TODO 进入两次 有问题
             var attr = parseAttribute(context, attributeNames);
+            if (attr.type === 6 /* NodeTypes.ATTRIBUTE */ &&
+                attr.value &&
+                attr.name === 'class') {
+                attr.value.content = attr.value.content.replace(/\s+/g, ' ').trim();
+            }
             if (type === 0 /* TagType.Start */) {
                 // 将属性名添加到属性名数组中
                 props.push(attr);
@@ -1910,7 +1981,6 @@ var Vue = (function (exports) {
             value: value && {
                 type: 2 /* NodeTypes.TEXT */,
                 content: value.content,
-                isStatic: false,
                 loc: value.loc
             },
             loc: {}
@@ -1964,6 +2034,47 @@ var Vue = (function (exports) {
         // 类型一致：如果 helpers 用的是 Symbol，查找时也要用 Symbol，不能用字符串。
         // 比如：helper(CREATE_ELEMENT_VNODE)，而不是 helper("CREATE_ELEMENT_VNODE")。
         return ssr || isComponent ? CREATE_VNODE : CREATE_ELEMENT_VNODE;
+    }
+    /**
+     * 判断是否为 v-slot
+     */
+    function isVSlot(node) {
+        return node.type === 7 /* NodeTypes.DIRECTIVE */ && node.name === "slot";
+    }
+    /**
+     * 返回 node 节点
+     * @param node
+     * @returns
+     */
+    function getMemoedVNodeCall(node) {
+        return node;
+    }
+    /**
+     * 注入属性 填充 props
+     * @param node
+     * @param prop
+     */
+    function injectProp(node, prop) {
+        var propsWithInjection;
+        var props = node.type === 13 /* NodeTypes.VNODE_CALL */ ? node.props : node.arguments[2];
+        if (props == null || isString(props)) {
+            propsWithInjection = createObjectExpression([prop]);
+        }
+        if (node.type === 13 /* NodeTypes.VNODE_CALL */) {
+            node.props = propsWithInjection;
+        }
+    }
+    /**
+     * 创建对象表达式节点
+     * @param properties 属性
+     * @returns 返回一个对象表达式节点
+     */
+    function createObjectExpression(properties) {
+        return {
+            type: 15 /* NodeTypes.JS_OBJECT_EXPRESSION */,
+            loc: {},
+            properties: properties
+        };
     }
 
     function transform(root, options) {
@@ -2036,16 +2147,40 @@ var Vue = (function (exports) {
         for (var i_1 = 0; i_1 < nodeTransforms.length; i_1++) {
             var onExit = nodeTransforms[i_1](node, context);
             if (onExit) {
-                exitFns.push(onExit);
+                // 如果 onExit 是数组，则将数组中的每个元素添加到 exitFns 中
+                if (isArray(onExit)) {
+                    exitFns.push.apply(exitFns, __spreadArray([], __read(onExit), false));
+                }
+                else {
+                    exitFns.push(onExit);
+                }
+            }
+            // 因为触发了 replaceNode 方法，可能导致 context.currentNode 发生改变，所以需要在这里校正
+            if (!context.currentNode) {
+                return;
+            }
+            else {
+                // 节点更换
+                node = context.currentNode;
             }
         }
+        // 继续转化子节点
         switch (node.type) {
+            case 10 /* NodeTypes.IF_BRANCH */:
             case 1 /* NodeTypes.ELEMENT */:
             case 0 /* NodeTypes.ROOT */:
                 traverseChildren(node, context);
                 break;
             case 5 /* NodeTypes.INTERPOLATION */: // {{xxx}} 差值表达式
                 context.helper(TO_DISPLAY_STRING);
+                break;
+            // v-if 指令
+            case 9 /* NodeTypes.IF */:
+                // 处理 v-if 指令
+                for (var i_2 = 0; i_2 < node.branches.length; i_2++) {
+                    var branch = node.branches[i_2];
+                    traverseNode(branch, context);
+                }
                 break;
         }
         // 退出阶段
@@ -2070,6 +2205,41 @@ var Vue = (function (exports) {
                 traverseNode(child, context);
             }
         }
+    }
+    /**
+     * 创建结构化指令转换函数
+     * @param name 指令名称或正则表达式
+     * @param fn 转换函数
+     * @returns 返回一个转换函数，该函数用于处理节点上的结构化指令
+     */
+    function createStructuralDirectiveTransform(name, fn) {
+        // s 参数指的是指令名称（directive name）例如：当解析 <div v-if="condition"> 时，s 就是 "if"； 若 name 是字符串，则直接比较，若 name 是正则，则使用正则匹配
+        var matches = isString(name) ? function (s) { return s === name; } : function (s) { return name.test(s); };
+        return function (node, context) {
+            if (node.type === 1 /* NodeTypes.ELEMENT */) {
+                var props = node.props;
+                // 结构转化与 v-slot 无关，所以需要过滤掉 v-slot 指令
+                if (node.tagType === 3 /* ElementTypes.TEMPLATE */ && props.some(isVSlot)) {
+                    return;
+                }
+                // 存储转化函数的数组
+                var exitFns = [];
+                for (var i = 0; i < props.length; i++) {
+                    var prop = props[i];
+                    if (prop.type === 7 /* NodeTypes.DIRECTIVE */ && matches(prop.name)) {
+                        // 移除指令，避免无限递归
+                        props.splice(i, 1);
+                        i--;
+                        var onExit = fn(node, context, prop, i);
+                        if (onExit) {
+                            exitFns.push(onExit);
+                        }
+                    }
+                }
+                // 返回 exitFns 数组，数组中存储的是转化函数的返回值，这些返回值是转化函数的退出函数
+                return exitFns;
+            }
+        };
     }
 
     /**
@@ -2370,13 +2540,104 @@ var Vue = (function (exports) {
         context.push(isStatic ? JSON.stringify(content) : content, node);
     }
 
+    /**
+     * 处理 v-if 指令
+     * @param node 当前节点
+     * @param context 上下文
+     * @param dir 指令
+     * @returns 返回一个转换函数，该函数用于处理节点上的结构化指令
+     */
+    var transformIf = createStructuralDirectiveTransform(/^(if|else|else-if)$/, function (node, context, dir) {
+        return processIf(node, context, dir, function (ifNode, branch, isRoot) {
+            // TODO 目前无需处理兄弟节点情况
+            var key = 0;
+            return function () {
+                if (isRoot) {
+                    ifNode.codegenNode = createCodegenNodeForBranch(branch, key, context);
+                }
+            };
+        });
+    });
+    /**
+     * 处理 v-if 指令
+     * @param node 当前节点
+     * @param context 上下文
+     * @param dir 指令
+     * @param processCodegen 处理 codegenNode 的函数
+     */
+    function processIf(node, context, dir, processCodegen) {
+        if (dir.name === "if") {
+            var branch = createIfBranch(node, dir);
+            // 生成 if 指令节点
+            var ifNode = {
+                type: 9 /* NodeTypes.IF */,
+                loc: node.loc,
+                branches: [branch],
+            };
+            // 切换 currentNode 为 ifNode
+            context.replaceNode(ifNode);
+            // 处理 codegenNode
+            if (processCodegen) {
+                return processCodegen(ifNode, branch, true);
+            }
+        }
+    }
+    /**
+     * 创建 if 指令的 branch 分支
+     * @param node 当前节点
+     * @param dir 指令
+     * @returns 返回一个 if 分支节点
+     */
+    function createIfBranch(node, dir) {
+        return {
+            type: 10 /* NodeTypes.IF_BRANCH */,
+            loc: node.loc,
+            condition: dir.exp,
+            children: [node],
+        };
+    }
+    /**
+     * 创建 codegenNode 节点
+     * @param branch 分支
+     * @param keyIndex 键索引
+     * @param context 上下文
+     * @returns 返回一个 codegenNode 节点
+     */
+    function createCodegenNodeForBranch(branch, keyIndex, context) {
+        if (branch.condition) {
+            return createConditionalExpression(branch.condition, createChildrenCodegenNode(branch, keyIndex), 
+            // 以注释的形式展示 v-if
+            createCallExpression(context.helper(CREATE_COMMENT), ['"v-if"', 'true']));
+        }
+        else {
+            return createChildrenCodegenNode(branch, keyIndex);
+        }
+    }
+    /**
+     * 创建指定子节点 codegenNode 节点
+     * @param branch 分支
+     * @param keyIndex 键索引
+     * @returns 返回一个子节点 codegenNode 节点
+     */
+    function createChildrenCodegenNode(branch, keyIndex) {
+        var keyProperty = createObjectProperty("key", createSimpleExpression("".concat(keyIndex), false));
+        var children = branch.children;
+        var firstChild = children[0];
+        var ret = firstChild.codegenNode;
+        var vnodeCall = getMemoedVNodeCall(ret);
+        // 填充 props
+        injectProp(vnodeCall, keyProperty);
+        return ret;
+    }
+
     function baseCompile(template, options) {
         if (options === void 0) { options = {}; }
         var ast = baseParse(template);
         transform(ast, extend(options, {
             nodeTransforms: [
                 transformElement,
-                transformText
+                transformText,
+                transformIf
             ]
         }));
         console.log(JSON.stringify(ast));

@@ -1,5 +1,7 @@
-import { NodeTypes } from "../ast"
+import { createCallExpression, createConditionalExpression, createObjectProperty, createSimpleExpression, NodeTypes } from "../ast"
+import { CREATE_COMMENT } from "../runtimeHelpers"
 import { createStructuralDirectiveTransform, TransformContext } from "../transform"
+import { getMemoedVNodeCall, injectProp } from "../utils"
 
 /**
  * 处理 v-if 指令
@@ -66,7 +68,52 @@ function createIfBranch(node, dir) {
         children: [node],
     }
 }
-function createCodegenNodeForBranch(branch: any, key: number, context: any): any {
-    throw new Error("Function not implemented.")
+
+
+/**
+ * 创建 codegenNode 节点
+ * @param branch 分支
+ * @param keyIndex 键索引
+ * @param context 上下文
+ * @returns 返回一个 codegenNode 节点
+ */
+function createCodegenNodeForBranch(branch, keyIndex: number, context: TransformContext) {
+    if(branch.condition) {
+        return createConditionalExpression(
+            branch.condition,
+            createChildrenCodegenNode(branch, keyIndex),
+            // 以注释的形式展示 v-if
+            createCallExpression(context.helper(CREATE_COMMENT), ['"v-if"', 'true'])
+        )
+    }
+    else {
+        return createChildrenCodegenNode(branch, keyIndex)
+    }
 }
 
+/**
+ * 创建指定子节点 codegenNode 节点
+ * @param branch 分支
+ * @param keyIndex 键索引
+ * @returns 返回一个子节点 codegenNode 节点
+ */
+function createChildrenCodegenNode(branch, keyIndex: number) {
+    const keyProperty = createObjectProperty(
+        `key`,
+        createSimpleExpression(
+          `${keyIndex}`,
+          false,
+        )
+      )
+
+      const {children} = branch
+      const firstChild = children[0]
+
+      const ret = firstChild.codegenNode
+      const vnodeCall = getMemoedVNodeCall(ret)
+
+    // 填充 props
+    injectProp(vnodeCall, keyProperty)
+
+    return ret
+}

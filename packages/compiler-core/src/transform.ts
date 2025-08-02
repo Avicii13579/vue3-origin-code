@@ -1,8 +1,8 @@
-import { isString } from "@vue/shared"
+import { isArray, isString } from "@vue/shared"
 import { createObjectProperty, createSimpleExpression, ElementTypes, NodeTypes } from "./ast"
 import { isSingleElementRoot } from "./hoistStatic"
-import { CREATE_COMMENT, TO_DISPLAY_STRING } from "./runtimeHelpers"
-import { getMemoedVNodeCall, injectProp, isVSlot } from "./utils"
+import { TO_DISPLAY_STRING } from "./runtimeHelpers"
+import { isVSlot } from "./utils"
 
 export function transform(root, options) {
     // 创建 transform 上下文
@@ -100,10 +100,25 @@ export function traverseNode(node, context) {
     for(let i = 0; i < nodeTransforms.length; i++) {
         const onExit = nodeTransforms[i](node, context)
         if(onExit) {
-            exitFns.push(onExit)
+            // 如果 onExit 是数组，则将数组中的每个元素添加到 exitFns 中
+            if(isArray(onExit)) {
+                exitFns.push(...onExit)
+            } else {
+                exitFns.push(onExit)
+            }
+        }
+
+        // 因为触发了 replaceNode 方法，可能导致 context.currentNode 发生改变，所以需要在这里校正
+        if(!context.currentNode) {
+            return
+        } else {
+            // 节点更换
+            node = context.currentNode
         }
     }
+    // 继续转化子节点
     switch(node.type) {
+        case NodeTypes.IF_BRANCH:
         case NodeTypes.ELEMENT:
         case NodeTypes.ROOT:
             traverseChildren(node, context)
@@ -111,6 +126,15 @@ export function traverseNode(node, context) {
         case NodeTypes.INTERPOLATION: // {{xxx}} 差值表达式
             context.helper(TO_DISPLAY_STRING)
             break
+        // v-if 指令
+        case NodeTypes.IF:
+            // 处理 v-if 指令
+            for(let i = 0; i < node.branches.length; i++) {
+                const branch = node.branches[i]
+                traverseNode(branch, context)
+            }
+            break
+        
     }
 
     // 退出阶段
@@ -172,86 +196,4 @@ export function createStructuralDirectiveTransform(name:string | RegExp, fn) {
             return exitFns
         }
     }
-}
-
-/**
- * 创建 codegenNode 节点
- * @param branch 分支
- * @param keyIndex 键索引
- * @param context 上下文
- * @returns 返回一个 codegenNode 节点
- */
-function createCodegenNodeForBranch(branch, keyIndex: number, context: TransformContext) {
-    if(branch.condition) {
-        return createConditionalExpression(
-            branch.condition,
-            createChildrenCodegenNode(branch, keyIndex),
-            // 以注释的形式展示 v-if
-            createCallExpression(context.helper(CREATE_COMMENT), ['"v-if"', 'true'])
-        )
-    }
-    else {
-        return createChildrenCodegenNode(branch, keyIndex)
-    }
-}
-
-/**
- * 创建 JS 调用表达式的节点
- * @param callee 调用表达式
- * @param args 参数
- * @returns 返回一个 JS 调用表达式
- */
-export function createCallExpression(callee, args) {
-    return {
-        type: NodeTypes.JS_CALL_EXPRESSION,
-        loc: {},
-        callee,
-        arguments: args
-    }
-}
-
-/**
- * 创建条件表达式
- * @param test 条件
- * @param consequent 条件为真时的表达式
- * @param alternate 条件为假时的表达式
- * @param newline 是否换行
- * @returns 返回一个条件表达式
- */
-export function createConditionalExpression(test, consequent, alternate, newline = true) {
-    return {
-        type: NodeTypes.JS_CONDITIONAL_EXPRESSION,
-        test,
-        consequent,
-        alternate,
-        newline,
-        loc: {}
-    }
-}
-
-/**
- * 创建指定子节点 codegenNode 节点
- * @param branch 分支
- * @param keyIndex 键索引
- * @returns 返回一个子节点 codegenNode 节点
- */
-function createChildrenCodegenNode(branch, keyIndex: number) {
-    const keyProperty = createObjectProperty(
-        `key`,
-        createSimpleExpression(
-          `${keyIndex}`,
-          false,
-        )
-      )
-
-      const children = branch
-      const firstChild = children[0]
-
-      const ret = firstChild.codegenNode
-      const vnodeCall = getMemoedVNodeCall(ret)
-
-    // 填充 props
-    injectProp(vnodeCall, keyProperty)
-
-    return ret
 }

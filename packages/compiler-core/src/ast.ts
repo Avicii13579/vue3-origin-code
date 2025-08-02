@@ -110,3 +110,37 @@ export const createObjectProperty = (key, value) => {
     value
   }
 }
+
+/**
+ * 创建条件表达式
+ * @param test 条件
+ * @param consequent 条件为真时的表达式
+ * @param alternate 条件为假时的表达式
+ * @param newline 是否换行
+ * @returns 返回一个条件表达式
+ */
+export function createConditionalExpression(test, consequent, alternate, newline = true) {
+  return {
+      type: NodeTypes.JS_CONDITIONAL_EXPRESSION,
+      test,
+      consequent,
+      alternate,
+      newline,
+      loc: {}
+  }
+}
+
+/**
+ * 创建 JS 调用表达式的节点
+ * @param callee 调用表达式
+ * @param args 参数
+ * @returns 返回一个 JS 调用表达式
+ */
+export function createCallExpression(callee, args) {
+  return {
+      type: NodeTypes.JS_CALL_EXPRESSION,
+      loc: {},
+      callee,
+      arguments: args
+  }
+}

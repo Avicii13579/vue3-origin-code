@@ -221,7 +221,7 @@ function parseTextData(context:ParserContext, length:number) {
  * @returns 插值
  */
 function parseInterpolation(context:ParserContext) {
-    debugger
+    
     // open = {{  close = }}
     const [open, close] = ['{{', '}}']
 
@@ -272,8 +272,21 @@ function parseAttributes(context:ParserContext, type:TagType) {
         !startsWith(context.source, '>') &&
         !startsWith(context.source, '/>')
     ) {
+        if (startsWith(context.source, '/')) {
+            advanceBy(context, 1)
+            advanceSpaces(context)
+            continue
+          }
+        // TODO 进入两次 有问题
         const attr = parseAttribute(context, attributeNames)
 
+        if (
+            attr.type === NodeTypes.ATTRIBUTE &&
+            attr.value &&
+            attr.name === 'class'
+          ) {
+            attr.value.content = attr.value.content.replace(/\s+/g, ' ').trim()
+          }
         if(type === TagType.Start) {
             // 将属性名添加到属性名数组中
             props.push(attr)
@@ -349,7 +362,6 @@ function parseAttribute(context: ParserContext, nameSet: Set<string>) {
         value: value && {
             type: NodeTypes.TEXT,
             content: value.content,
-            isStatic: false,
             loc: value.loc
         },
         loc: {}
