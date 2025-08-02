@@ -5,6 +5,7 @@ import { normalizeVNode, renderComponentRoot } from "./componentRenderUtils"
 import { createComponentInstance, setupComponent } from "./component"
 import { ReactiveEffect } from "packages/reactivity/src/effect"
 import { queuePreFlushCb } from "./scheduler"
+import { createAppAPI } from "./apiCreateApp"
 
 
 export interface RendererOptions {
@@ -251,7 +252,7 @@ function baseCreateRenderer(options: RendererOptions): any {
             if (prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
                 // 新节点是是数组节点
                 if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
-                    // TODO 进行 diff 计算
+                    //  进行 diff 计算
                     patchKeyedChildren(c1, c2, container, anchor)
                 } else {
                     // TODO 卸载节点
@@ -489,7 +490,9 @@ function baseCreateRenderer(options: RendererOptions): any {
 
                 if(newIndex === undefined) {
                     // 若未找到 则卸载
-                    unmount(prevChild)
+                    if(prevChild.el) { // 特殊处理 对于动态节点，el 为空，则不卸载
+                        unmount(prevChild)
+                    }
                     continue
                 } else {
                     // newIndex 包括处理过的节点，所以需要减去 newStartIndex 获取到新节点在 newChildren 中的索引
@@ -547,7 +550,8 @@ function baseCreateRenderer(options: RendererOptions): any {
     }
 
     return {
-        render
+        render,
+        createApp: createAppAPI(render)
     }
 }
     

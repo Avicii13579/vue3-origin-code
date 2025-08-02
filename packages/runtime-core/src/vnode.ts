@@ -92,4 +92,13 @@ export function normalizeChildren(vnode: VNode, children: unknown) {
      */
 }
 
+/**
+ * 创建注释节点
+ * @param text 注释文本
+ * @returns 注释节点
+ */
+export function createCommentVNode(text: string) {
+    return createVNode(Comment, null, text)
+}
+
 export {createVNode as createElementVNode}

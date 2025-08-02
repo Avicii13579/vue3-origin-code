@@ -1,4 +1,4 @@
-import { extend } from "@vue/shared";
+import { extend, isString } from "@vue/shared";
 import { nodeOps } from "./nodeOps";
 import { patchProp } from "./patchProps";
 import { createRenderer } from "packages/runtime-core/src/renderer";
@@ -18,3 +18,28 @@ export const render = (...args) => {
     ensureRenderer().render(...args)
 }
  
+/**
+ * 创建并生成 app 实例
+ * @param args 
+ * @returns 
+ */
+export  const  createApp = (...args) => {
+    const app = ensureRenderer().createApp(...args)
+
+    // 获取挂载方法
+    const {mount} = app
+    app.mount = (containerOrSelector: Element | string) => {
+        const container = normalizeContainer(containerOrSelector)
+        if(!container) return
+        mount(container)
+    }
+    return app
+}
+
+function normalizeContainer(container: Element | string) {
+    if(isString(container)) {
+        const res = document.querySelector(container)
+        return res
+    }
+    return container
+}

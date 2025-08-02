@@ -675,6 +675,14 @@ var Vue = (function (exports) {
           ])
          */
     }
+    /**
+     * 创建注释节点
+     * @param text 注释文本
+     * @returns 注释节点
+     */
+    function createCommentVNode(text) {
+        return createVNode(Comment$1, null, text);
+    }
 
     function h(type, propsOrChildren, children) {
         // 获取传递参数的数量
@@ -989,6 +997,14 @@ var Vue = (function (exports) {
         var Component = instance.type;
         // 判断 render 不存在时才会赋值
         if (!instance.render) {
+            // 存在编辑器，且组件中不包含 render 函数，同时包含 template 模版，则直接使用编辑器进行编辑，得到 render 函数
+            if (compile$1 && !Component.render) {
+                if (Component.template) {
+                    // 将 runtime 模块和 compile 模块关联起来
+                    var template = Component.template;
+                    Component.render = compile$1(template);
+                }
+            }
             instance.render = Component.render;
         }
         // 处理 instance 上的 data 属性
@@ -1023,6 +1039,34 @@ var Vue = (function (exports) {
     function callHook(hook, proxy) {
         // 指定 this 并调用生命周期； proxy 是包含 msg 的 data
         hook.bind(proxy)();
+    }
+    var compile$1;
+    // 用于注册编译器的运行时
+    function registerRuntimeCompiler(_compile) {
+        compile$1 = _compile;
+    }
+
+    /**
+     * 创建 app 实例，返回一个函数
+     * @param render 渲染函数
+     * @returns
+     */
+    function createAppAPI(render) {
+        return function createApp(rootComponent, rootProps) {
+            if (rootProps === void 0) { rootProps = null; }
+            var app = {
+                _component: rootComponent,
+                _container: null,
+                // 挂载
+                mount: function (rootContainer) {
+                    // 直接通过 createVNode 创建 vnode
+                    var vnode = createVNode(rootComponent, rootProps);
+                    // 通过 render 函数渲染
+                    render(vnode, rootContainer);
+                }
+            };
+            return app;
+        };
     }
 
     // 创建渲染器
@@ -1221,7 +1265,7 @@ var Vue = (function (exports) {
                 if (prevShapeFlag & 16 /* ShapeFlags.ARRAY_CHILDREN */) {
                     // 新节点是是数组节点
                     if (shapeFlag & 16 /* ShapeFlags.ARRAY_CHILDREN */) {
-                        // TODO 进行 diff 计算
+                        //  进行 diff 计算
                         patchKeyedChildren(c1, c2, container, anchor);
                     }
                 }
@@ -1429,7 +1473,9 @@ var Vue = (function (exports) {
                     }
                     if (newIndex === undefined) {
                         // 若未找到 则卸载
-                        unmount(prevChild);
+                        if (prevChild.el) { // 特殊处理 对于动态节点，el 为空，则不卸载
+                            unmount(prevChild);
+                        }
                         continue;
                     }
                     else {
@@ -1487,7 +1533,8 @@ var Vue = (function (exports) {
             hostInsert(el, container, anchor);
         };
         return {
-            render: render
+            render: render,
+            createApp: createAppAPI(render)
         };
     }
     // diff 对比 获取最长递增子序列
@@ -1572,6 +1619,35 @@ var Vue = (function (exports) {
         // ensureRenderer() 返回的是个 renderer 实例，我们要调用它的 render 方法
         (_a = ensureRenderer()).render.apply(_a, __spreadArray([], __read(args), false));
     };
+    /**
+     * 创建并生成 app 实例
+     * @param args
+     * @returns
+     */
+    var createApp = function () {
+        var _a;
+        var args = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+            args[_i] = arguments[_i];
+        }
+        var app = (_a = ensureRenderer()).createApp.apply(_a, __spreadArray([], __read(args), false));
+        // 获取挂载方法
+        var mount = app.mount;
+        app.mount = function (containerOrSelector) {
+            var container = normalizeContainer(containerOrSelector);
+            if (!container)
+                return;
+            mount(container);
+        };
+        return app;
+    };
+    function normalizeContainer(container) {
+        if (isString(container)) {
+            var res = document.querySelector(container);
+            return res;
+        }
+        return container;
+    }
 
     var _a;
     var CREATE_ELEMENT_VNODE = Symbol('createElementVNode');
@@ -1713,7 +1789,7 @@ var Vue = (function (exports) {
                 node = parseInterpolation(context);
                 console.log('node:', node);
             }
-            else if (startsWith(s, '<')) {
+            else if (s[0] === '<') {
                 // 解析开始标签
                 if (/[a-z]/i.test(s[1])) {
                     // 解析开始标签
@@ -1781,7 +1857,7 @@ var Vue = (function (exports) {
         var children = parseChildren(context, ancestors);
         ancestors.pop();
         // 将子节点赋值给元素
-        element.children = children;
+        element['children'] = children;
         // 处理结束标签
         if (startsWithEndTagOpen(context.source, element.tag)) {
             parseTag(context, 1 /* TagType.End */);
@@ -1810,7 +1886,7 @@ var Vue = (function (exports) {
             tag: tag,
             tagType: tagType,
             props: props,
-            children: []
+            // children: []
         };
     }
     /**
@@ -1907,18 +1983,7 @@ var Vue = (function (exports) {
         while (context.source.length > 0 &&
             !startsWith(context.source, '>') &&
             !startsWith(context.source, '/>')) {
-            if (startsWith(context.source, '/')) {
-                advanceBy(context, 1);
-                advanceSpaces(context);
-                continue;
-            }
-            // TODO 进入两次 有问题
             var attr = parseAttribute(context, attributeNames);
-            if (attr.type === 6 /* NodeTypes.ATTRIBUTE */ &&
-                attr.value &&
-                attr.name === 'class') {
-                attr.value.content = attr.value.content.replace(/\s+/g, ' ').trim();
-            }
             if (type === 0 /* TagType.Start */) {
                 // 将属性名添加到属性名数组中
                 props.push(attr);
@@ -1936,7 +2001,7 @@ var Vue = (function (exports) {
     function parseAttribute(context, nameSet) {
         // 解析属性名
         var match = /^[^\t\r\n\f />][^\t\r\n\f />=]*/.exec(context.source);
-        var name = match[0]; // TODO 这里有问题 match 为空时，会报错
+        var name = match[0];
         // 将属性名添加到属性名集合中
         nameSet.add(name);
         // 截取属性名后的内容
@@ -1990,7 +2055,7 @@ var Vue = (function (exports) {
         var content = '';
         // 判断是单引号还是双引号
         var quote = context.source[0];
-        var isQuoted = quote === '"' || quote === "'";
+        var isQuoted = quote === "\"" || quote === "'";
         if (isQuoted) {
             // 截取属性值
             advanceBy(context, 1);
@@ -2000,7 +2065,7 @@ var Vue = (function (exports) {
             if (endIndex !== -1) {
                 content = parseTextData(context, endIndex);
                 // 截取属性值
-                advanceBy(context, endIndex + 1);
+                advanceBy(context, 1);
             }
             else {
                 content = parseTextData(context, context.source.length);
@@ -2373,6 +2438,7 @@ var Vue = (function (exports) {
     function genNode(node, context) {
         switch (node.type) {
             case 1 /* NodeTypes.ELEMENT */:
+            case 9 /* NodeTypes.IF */:
                 // 处理子节点
                 genNode(node.codegenNode, context);
                 break;
@@ -2393,6 +2459,12 @@ var Vue = (function (exports) {
             // {{}} 处理
             case 8 /* NodeTypes.COMPOUND_EXPRESSION */:
                 genCompoundExpression(node, context);
+                break;
+            case 14 /* NodeTypes.JS_CALL_EXPRESSION */:
+                genCallExpression(node, context);
+                break;
+            case 19 /* NodeTypes.JS_CONDITIONAL_EXPRESSION */:
+                genConditionalExpression(node, context);
                 break;
         }
     }
@@ -2539,6 +2611,58 @@ var Vue = (function (exports) {
         var content = node.content, isStatic = node.isStatic;
         context.push(isStatic ? JSON.stringify(content) : content, node);
     }
+    /**
+     * JS 调用表达式处理
+     * @param node JS_CALL_EXPRESSION 节点
+     * @param context 代码生成上下文
+     */
+    function genCallExpression(node, context) {
+        var push = context.push, helper = context.helper;
+        var callee = isString(node.callee) ? node.callee : helper(node.callee);
+        push(callee + '(', node);
+        genNodeList(node.arguments, context);
+        push(')');
+    }
+    function genConditionalExpression(node, context) {
+        var test = node.test, consequent = node.consequent, alternate = node.alternate, needNewline = node.newline;
+        var push = context.push, indent = context.indent, deindent = context.deindent, newline = context.newline;
+        if (test.type === 4 /* NodeTypes.SIMPLE_EXPRESSION */) {
+            // 写入变量
+            genExpression(test, context);
+        }
+        // 换行
+        needNewline && indent();
+        // 缩进 ++
+        context.indentLevel++;
+        // 写入空格
+        needNewline || push(' ');
+        // 写入
+        push('? ');
+        // 写入满足条件的处理逻辑
+        genNode(consequent, context);
+        // 反缩进 --
+        context.indentLevel--;
+        // 换行
+        needNewline && newline();
+        // 写入空格
+        needNewline || push(' ');
+        // 写入
+        push(': ');
+        // 判断 else 的类型是否为 JS_CONDITIONAL_EXPRESSION
+        var isNested = alternate.type === 19 /* NodeTypes.JS_CONDITIONAL_EXPRESSION */;
+        // 不是则缩进 ++
+        if (!isNested) {
+            context.indentLevel++;
+        }
+        // 写入 else 的逻辑
+        genNode(alternate, context);
+        // 反缩进 --
+        if (!isNested) {
+            context.indentLevel--;
+        }
+        //  控制缩进 + 换行
+        needNewline && deindent();
+    }
 
     /**
      * 处理 v-if 指令
@@ -2654,15 +2778,28 @@ var Vue = (function (exports) {
         console.log(render);
         return render;
     }
+    registerRuntimeCompiler(compileToFunction);
 
     exports.Comment = Comment$1;
+    exports.EMPTY_ARR = EMPTY_ARR;
+    exports.EMPTY_OBJ = EMPTY_OBJ;
     exports.Fragment = Fragment;
     exports.Text = Text$1;
     exports.compile = compileToFunction;
     exports.computed = computed;
+    exports.createApp = createApp;
+    exports.createCommentVNode = createCommentVNode;
     exports.createElementVNode = createVNode;
     exports.effect = effect;
+    exports.extend = extend;
     exports.h = h;
+    exports.hasChanged = hasChanged;
+    exports.isArray = isArray;
+    exports.isFunction = isFunction;
+    exports.isObject = isObject;
+    exports.isOn = isOn;
+    exports.isSameVNodeType = isSameVNodeType;
+    exports.isString = isString;
     exports.queuePreFlushCb = queuePreFlushCb;
     exports.reactive = reactive;
     exports.ref = ref;

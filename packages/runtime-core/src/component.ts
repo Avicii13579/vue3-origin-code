@@ -68,6 +68,16 @@ function finishComponentSetup(instance) {
 
     // 判断 render 不存在时才会赋值
     if(!instance.render) {
+        // 存在编辑器，且组件中不包含 render 函数，同时包含 template 模版，则直接使用编辑器进行编辑，得到 render 函数
+        if(compile && !Component.render) {
+            if(Component.template) {
+                // 将 runtime 模块和 compile 模块关联起来
+                const template = Component.template
+                Component.render = compile(template)
+            }
+        }
+
+
         instance.render = Component.render
     }
     // 处理 instance 上的 data 属性
@@ -114,4 +124,10 @@ function applyOptions(instance:any) {
 function callHook(hook: Function, proxy) {
     // 指定 this 并调用生命周期； proxy 是包含 msg 的 data
     hook.bind(proxy)()
+}
+
+let compile
+// 用于注册编译器的运行时
+export function registerRuntimeCompiler(_compile) {
+    compile = _compile
 }

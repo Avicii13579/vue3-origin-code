@@ -75,6 +75,7 @@ export function generate(ast) {
 function genNode(node, context) {
     switch(node.type) {
         case NodeTypes.ELEMENT:
+        case NodeTypes.IF:
             // 处理子节点
             genNode(node.codegenNode!, context)
             break
@@ -95,6 +96,12 @@ function genNode(node, context) {
         // {{}} 处理
         case NodeTypes.COMPOUND_EXPRESSION:
             genCompoundExpression(node, context)
+            break
+        case NodeTypes.JS_CALL_EXPRESSION:
+            genCallExpression(node, context)
+            break
+        case NodeTypes.JS_CONDITIONAL_EXPRESSION:
+            genConditionalExpression(node, context)
             break
     }
 }
@@ -259,4 +266,63 @@ function genExpression(node, context) {
    context.push(isStatic ? JSON.stringify(content) : content, node)
 }
 
+/**
+ * JS 调用表达式处理
+ * @param node JS_CALL_EXPRESSION 节点
+ * @param context 代码生成上下文
+ */
+function genCallExpression(node, context) {
+    const {push, helper} = context
+   const callee = isString(node.callee) ? node.callee : helper(node.callee)
+
+    push(callee + '(', node)
+    genNodeList(node.arguments, context)
+    push(')')
+}
+
+
+function genConditionalExpression(node, context) {
+    const {test, consequent, alternate, newline:needNewline} = node
+    const {push, indent, deindent, newline} = context
+
+    if(test.type === NodeTypes.SIMPLE_EXPRESSION) {
+        // 写入变量
+        genExpression(test, context)
+    }
+
+    // 换行
+    needNewline && indent()
+    // 缩进 ++
+    context.indentLevel++
+    // 写入空格
+    needNewline || push(' ')
+    // 写入
+    push('? ')
+
+    // 写入满足条件的处理逻辑
+    genNode(consequent, context)
+    // 反缩进 --
+    context.indentLevel--
+    // 换行
+    needNewline && newline()
+    // 写入空格
+    needNewline || push(' ')
+    // 写入
+    push(': ')
+
+    // 判断 else 的类型是否为 JS_CONDITIONAL_EXPRESSION
+    const isNested = alternate.type === NodeTypes.JS_CONDITIONAL_EXPRESSION
+    // 不是则缩进 ++
+    if(!isNested) {
+       context.indentLevel++
+    }
+    // 写入 else 的逻辑
+    genNode(alternate, context)
+    // 反缩进 --
+    if(!isNested) {
+        context.indentLevel--
+    }
+    //  控制缩进 + 换行
+    needNewline && deindent()
+}
 

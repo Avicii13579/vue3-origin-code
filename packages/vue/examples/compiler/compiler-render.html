@@ -1,0 +1,20 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>compiler + render 实现渲染</title>
+    <script src="../../dist/vue.js"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      // 目标 createApp 内部要生成对应 vnode
+      // mount 方法要能触发 render 生成 vnode
+      const { h, createApp } = Vue
+      const APP = {
+        template: `<div> hello world </div>`
+      }
+      const app = createApp(APP).mount('#app')
+    </script>
+  </body>
+</html>

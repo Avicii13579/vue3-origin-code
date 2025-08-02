@@ -39,7 +39,7 @@ function parseChildren(context:ParserContext, ancestors:any[]) {
         if(startsWith(s, '{{')) {
             node = parseInterpolation(context)
             console.log('node:', node)
-        } else if(startsWith(s, '<')) {
+        } else if(s[0] === '<') {
             // 解析开始标签
             if(/[a-z]/i.test(s[1])) {
                 // 解析开始标签
@@ -123,7 +123,7 @@ function parseElement(context:ParserContext, ancestors) {
     const children = parseChildren(context, ancestors)
     ancestors.pop()
     // 将子节点赋值给元素
-    element.children = children
+    element['children'] = children
 
     // 处理结束标签
     if(startsWithEndTagOpen(context.source, element.tag)) {
@@ -160,7 +160,7 @@ function parseTag(context:ParserContext, type:TagType) {
         tag,
         tagType,
         props, // 属性
-        children: []
+        // children: []
     }
 
 }
@@ -272,21 +272,7 @@ function parseAttributes(context:ParserContext, type:TagType) {
         !startsWith(context.source, '>') &&
         !startsWith(context.source, '/>')
     ) {
-        if (startsWith(context.source, '/')) {
-            advanceBy(context, 1)
-            advanceSpaces(context)
-            continue
-          }
-        // TODO 进入两次 有问题
         const attr = parseAttribute(context, attributeNames)
-
-        if (
-            attr.type === NodeTypes.ATTRIBUTE &&
-            attr.value &&
-            attr.name === 'class'
-          ) {
-            attr.value.content = attr.value.content.replace(/\s+/g, ' ').trim()
-          }
         if(type === TagType.Start) {
             // 将属性名添加到属性名数组中
             props.push(attr)
@@ -305,7 +291,7 @@ function parseAttributes(context:ParserContext, type:TagType) {
 function parseAttribute(context: ParserContext, nameSet: Set<string>) {
     // 解析属性名
     const match = /^[^\t\r\n\f />][^\t\r\n\f />=]*/.exec(context.source)!
-    const name = match[0] // TODO 这里有问题 match 为空时，会报错
+    const name = match[0]
     // 将属性名添加到属性名集合中
     nameSet.add(name)
 
@@ -373,7 +359,7 @@ function parseAttributeValue(context:ParserContext) {
 
     // 判断是单引号还是双引号
     const quote = context.source[0]
-    const isQuoted = quote === '"' || quote === "'"
+    const isQuoted = quote === `"` || quote === `'`
 
     if(isQuoted) {
         // 截取属性值
@@ -385,7 +371,7 @@ function parseAttributeValue(context:ParserContext) {
         if(endIndex !== -1) {
             content = parseTextData(context, endIndex)
             // 截取属性值
-            advanceBy(context, endIndex + 1)
+            advanceBy(context, 1)
         } else {
             content = parseTextData(context, context.source.length)
         }
